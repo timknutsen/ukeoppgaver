@@ -14,7 +14,7 @@ ukestripa for å se oppgavene, trykk på en oppgave for å hake den av.
 
 | Man | Tir | Ons | Tor | Fre | Lør |
 |---|---|---|---|---|---|
-| Oppvask | Trappa | Oppvask | Badet nede | Oppvask | Rommet |
+| Oppvask | Trappa | Oppvask + toalett nede | – | Oppvask | Rydde og vaske rommet |
 
 Planen ligger i `TASKS`-lista øverst i skriptet i `index.html`. `day: 0` er
 mandag, `day: 6` er søndag. Legg til, fjern eller flytt oppgaver der.
