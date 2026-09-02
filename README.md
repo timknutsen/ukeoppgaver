@@ -14,20 +14,26 @@ ukestripa for å se oppgavene, trykk på en oppgave for å hake den av.
 
 | Man | Tir | Ons | Tor | Fre | Lør |
 |---|---|---|---|---|---|
-| Oppvask | Trappa | Oppvask + toalett nede | – | Oppvask | Rydde og vaske rommet |
+| Oppvask | Trappa | Toalett nede | Oppvask | Oppvask | Rydde og vaske rommet |
 
 Planen ligger i `TASKS`-lista øverst i skriptet i `index.html`. `day: 0` er
 mandag, `day: 6` er søndag. Legg til, fjern eller flytt oppgaver der.
 
-## Garmin-mål
+## Opptjent
 
-Alle seks oppgaver i en uke = 250 kr mot en Garmin Forerunner 165 Music
-(2 999 kr, se `forerunner-165.webp`). Sparesummen er aldri en løs teller —
-den regnes ut fra listen over fullførte uker i `localStorage`
-(`ukeoppgaver.mal.v1`, `{ pris, ukesats, uker: [...] }`). En ny uke legges
-bare til listen når mandagen skifter og alle seks oppgaver sto avhaket for
-uka som nettopp gikk. "Mål"-fanen viser fremdriften mot klokka, med
-klokkedetaljer én trykk unna.
+Alle seks oppgaver i en uke = 250 kr. Totalen er aldri en løs teller — den
+regnes ut fra listen over fullførte uker i `localStorage`
+(`ukeoppgaver.opptjent.v1`, `{ ukesats, uker: [...] }`, der `uker` er
+mandagsdatoer). En ny uke legges bare til listen når mandagen skifter og alle
+seks oppgaver sto avhaket for uka som nettopp gikk; er uka fullført akkurat
+nå, vises de 250 kronene som "ikke låst" til mandagen passerer.
+
+"Opptjent"-fanen viser totalen, antall perfekte uker, lengste rekke og en
+kumulativ kurve med én posisjon per kalenderuke — bomma uker blir flate
+partier. Kurven har sikte-strek med verdi ved hover, piltast-navigasjon ved
+tastaturfokus, og en `Alle uker`-tabell så ingen verdi bare finnes i et
+verktøytips. Den gamle nøkkelen `ukeoppgaver.mal.v1` (Garmin-målet) migreres
+automatisk første gang appen åpnes.
 
 ## Kjøre lokalt
 
