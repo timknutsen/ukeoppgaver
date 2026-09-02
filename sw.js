@@ -1,13 +1,12 @@
 // Enkel offline-cache. Bump CACHE ved endringer i appen.
-const CACHE = "ukeoppgaver-v3";
+const CACHE = "ukeoppgaver-v4";
 const ASSETS = [
   "./",
   "./index.html",
   "./manifest.webmanifest",
   "./icon-180.png",
   "./icon-192.png",
-  "./icon-512.png",
-  "./forerunner-165.webp"
+  "./icon-512.png"
 ];
 
 self.addEventListener("install", e => {
