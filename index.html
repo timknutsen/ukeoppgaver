@@ -299,6 +299,46 @@
   @media (prefers-reduced-motion: reduce){
     *{animation-duration:.01ms !important; transition-duration:.01ms !important}
   }
+
+  /* ---------- Innlogging ---------- */
+  .login-wrap{min-height:100dvh; display:flex; flex-direction:column; justify-content:center; gap:20px}
+  .login-title{font-size:1.4rem; font-weight:800; text-align:center; letter-spacing:-.02em}
+  .login-sub{color:var(--muted); font-size:.84rem; text-align:center; margin-top:-8px}
+  .member-grid{display:grid; grid-template-columns:1fr 1fr; gap:10px}
+  .member-btn{
+    appearance:none; border:1px solid var(--line); background:var(--card); color:var(--txt);
+    border-radius:16px; padding:20px 10px; font:800 1rem system-ui; cursor:pointer;
+    display:flex; flex-direction:column; align-items:center; gap:8px;
+  }
+  .member-btn:active{transform:scale(.97)}
+  .member-avatar{
+    width:44px; height:44px; border-radius:50%; display:grid; place-items:center;
+    background:linear-gradient(160deg,var(--accent),var(--accent-2)); color:#04121f; font-weight:800;
+  }
+  .pin-dots{display:flex; gap:14px; justify-content:center; margin:6px 0 4px}
+  .pin-dots i{width:14px; height:14px; border-radius:50%; border:2px solid var(--line); display:block}
+  .pin-dots i.filled{background:var(--accent); border-color:var(--accent)}
+  .pin-dots.error i{border-color:#f87171}
+  .pin-pad{display:grid; grid-template-columns:repeat(3,1fr); gap:10px; max-width:280px; margin:0 auto}
+  .pin-key{
+    appearance:none; border:1px solid var(--line); background:var(--card); color:var(--txt);
+    border-radius:14px; padding:16px 0; font:800 1.2rem system-ui; cursor:pointer;
+  }
+  .pin-key:active{transform:scale(.95)}
+  .pin-back{text-align:center; color:var(--muted); font-size:.82rem; background:none; border:none; cursor:pointer; padding:8px}
+  .whoami{
+    position:fixed; top:calc(env(safe-area-inset-top) + 14px); right:calc(env(safe-area-inset-right) + 14px);
+    z-index:30; display:flex; align-items:center; gap:8px; background:var(--card); border:1px solid var(--line);
+    border-radius:999px; padding:6px 10px 6px 6px; font-size:.76rem; font-weight:700; cursor:pointer;
+  }
+  .whoami .member-avatar{width:22px; height:22px; font-size:.68rem}
+  .admin-member{background:var(--card-2); border:1px solid var(--line); border-radius:var(--r); padding:14px; margin-bottom:12px}
+  .admin-member h3{margin:0 0 2px; font-size:.98rem}
+  .admin-task-row{display:flex; align-items:center; gap:10px; padding:8px 0; border-bottom:1px solid color-mix(in srgb, var(--line) 55%, transparent)}
+  .admin-task-row:last-of-type{border-bottom:none}
+  .admin-task-row .check{width:24px; height:24px}
+  .admin-task-row .check svg{width:13px; height:13px}
+  .admin-task-row .label{flex:1; font-size:.86rem; font-weight:600}
 </style>
 </head>
 <body>
@@ -311,7 +351,30 @@
   </defs>
 </svg>
 
-<main id="viewUke" class="view">
+<main id="viewLogin" class="view">
+  <div class="login-wrap">
+    <div id="loginStep1">
+      <div class="login-title">Hvem er du?</div>
+      <div class="login-sub" style="margin-bottom:6px">Trykk på navnet ditt</div>
+      <div class="member-grid" id="memberGrid"></div>
+    </div>
+    <div id="loginStep2" hidden>
+      <div class="login-title" id="pinTitle">PIN-kode</div>
+      <div class="pin-dots" id="pinDots">
+        <i></i><i></i><i></i><i></i>
+      </div>
+      <div class="pin-pad" id="pinPad"></div>
+      <button type="button" class="pin-back" id="pinBack">‹ Bytt person</button>
+    </div>
+  </div>
+</main>
+
+<button type="button" class="whoami" id="whoami" hidden>
+  <span class="member-avatar" id="whoamiAvatar"></span>
+  <span id="whoamiName"></span>
+</button>
+
+<main id="viewUke" class="view" hidden>
   <header>
     <div>
       <h1 class="title">Ukeoppgaver</h1>
@@ -416,6 +479,12 @@
   </div>
 </main>
 
+<main id="viewAdmin" class="view" hidden>
+  <h1 class="title">Admin</h1>
+  <div class="sub">Se og rette denne ukas oppgaver for alle</div>
+  <div id="adminList" style="margin-top:16px"></div>
+</main>
+
 <nav class="tabbar" id="tabbar">
   <div class="tabbar-inner">
     <button type="button" class="tab active" id="tabUke" data-view="uke">
@@ -426,12 +495,179 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="6" width="19" height="12" rx="2.5"/><circle cx="12" cy="12" r="2.75"/><path d="M6 9.5v5M18 9.5v5"/></svg>
       <span>Opptjent</span>
     </button>
+    <button type="button" class="tab" id="tabAdmin" data-view="admin" hidden>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 3.2v5.3c0 4.4-3 8.2-7 9.5-4-1.3-7-5.1-7-9.5V6.2L12 3Z"/><path d="M9 12l2 2 4-4"/></svg>
+      <span>Admin</span>
+    </button>
   </div>
 </nav>
+
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+<script>
+// ---- Firebase-oppsett ----
+// Lag et gratis Firebase-prosjekt på https://console.firebase.google.com,
+// slå på "Anonymous" under Authentication > Sign-in method, slå på Firestore,
+// og lim inn config-objektet fra Project settings > General > Your apps her.
+const firebaseConfig = {
+  apiKey: "REPLACE_ME",
+  authDomain: "REPLACE_ME.firebaseapp.com",
+  projectId: "REPLACE_ME",
+  storageBucket: "REPLACE_ME.appspot.com",
+  messagingSenderId: "REPLACE_ME",
+  appId: "REPLACE_ME"
+};
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const db = firebase.firestore();
+</script>
 
 <script>
 (function(){
   "use strict";
+
+  // ---- Innlogging: familiemedlemmer hentes fra Firestore-samlingen "members" ----
+  // Hvert dokument: { name, pin (4 sifre), isAdmin, order }
+  const MEMBER_KEY = "ukeoppgaver.member.v1";
+  const LEGACY_CLAIMED_KEY = "ukeoppgaver.legacyClaimed.v1";
+
+  const loginView   = document.getElementById("viewLogin");
+  const step1El     = document.getElementById("loginStep1");
+  const step2El     = document.getElementById("loginStep2");
+  const memberGrid  = document.getElementById("memberGrid");
+  const pinDotsEl   = document.getElementById("pinDots");
+  const pinPadEl    = document.getElementById("pinPad");
+  const pinTitleEl  = document.getElementById("pinTitle");
+  const whoamiEl    = document.getElementById("whoami");
+
+  let members = [];
+  let pickedMember = null;
+  let pinBuf = "";
+
+  function initials(name){
+    return name.trim().split(/\s+/).slice(0,2).map(w => w[0].toUpperCase()).join("");
+  }
+
+  function renderMemberGrid(){
+    memberGrid.innerHTML = "";
+    members.forEach(m => {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "member-btn";
+      b.innerHTML = '<span class="member-avatar">' + initials(m.name) + '</span><span>' + m.name + '</span>';
+      b.addEventListener("click", () => openPinFor(m));
+      memberGrid.appendChild(b);
+    });
+    if(!members.length){
+      memberGrid.innerHTML = '<div class="empty" style="grid-column:1/-1"><span class="big">👋</span>Ingen familiemedlemmer er satt opp ennå.<br>Legg dem til i Firestore-samlingen <b>members</b>.</div>';
+    }
+  }
+
+  function renderPinPad(){
+    pinPadEl.innerHTML = "";
+    ["1","2","3","4","5","6","7","8","9","","0","⌫"].forEach(k => {
+      const b = document.createElement("button");
+      b.type = "button";
+      if(k === ""){ b.style.visibility = "hidden"; b.className = "pin-key"; pinPadEl.appendChild(b); return; }
+      b.className = "pin-key";
+      b.textContent = k;
+      b.addEventListener("click", () => {
+        if(k === "⌫"){ pinBuf = pinBuf.slice(0,-1); }
+        else if(pinBuf.length < 4){ pinBuf += k; buzz(8); }
+        updatePinDots();
+        if(pinBuf.length === 4) checkPin();
+      });
+      pinPadEl.appendChild(b);
+    });
+  }
+
+  function updatePinDots(){
+    pinDotsEl.classList.remove("error");
+    Array.from(pinDotsEl.children).forEach((dot,i) => dot.classList.toggle("filled", i < pinBuf.length));
+  }
+
+  function openPinFor(m){
+    pickedMember = m;
+    pinBuf = "";
+    updatePinDots();
+    pinTitleEl.textContent = "Hei " + m.name + " – PIN-kode";
+    step1El.hidden = true;
+    step2El.hidden = false;
+  }
+
+  function checkPin(){
+    if(pinBuf === String(pickedMember.pin)){
+      buzz([12,40,18]);
+      logIn(pickedMember);
+    } else {
+      pinDotsEl.classList.add("error");
+      buzz([60,40,60]);
+      setTimeout(() => { pinBuf = ""; updatePinDots(); }, 260);
+    }
+  }
+
+  document.getElementById("pinBack").addEventListener("click", () => {
+    step2El.hidden = true; step1El.hidden = false; pinBuf = ""; pickedMember = null;
+  });
+
+  function buzz(ms){ if(navigator.vibrate) navigator.vibrate(ms); }
+
+  function logIn(m){
+    try{ localStorage.setItem(MEMBER_KEY, JSON.stringify({ id:m.id, name:m.name, isAdmin:!!m.isAdmin })); }catch(e){}
+    enterApp(m);
+  }
+
+  window.logOut = function(){
+    try{ localStorage.removeItem(MEMBER_KEY); }catch(e){}
+    location.reload();
+  };
+
+  function enterApp(m){
+    loginView.hidden = true;
+    whoamiEl.hidden = false;
+    document.getElementById("whoamiAvatar").textContent = initials(m.name);
+    document.getElementById("whoamiName").textContent = m.name;
+    document.getElementById("viewUke").hidden = false;
+    document.getElementById("tabAdmin").hidden = !m.isAdmin;
+    startApp(m);
+  }
+
+  whoamiEl.addEventListener("click", () => {
+    if(confirm("Logg ut og bytte person?")) logOut();
+  });
+
+  renderPinPad();
+
+  auth.signInAnonymously().catch(err => {
+    memberGrid.innerHTML = '<div class="empty" style="grid-column:1/-1"><span class="big">⚠️</span>Fikk ikke kontakt med serveren.<br>' + (err && err.message ? err.message : "") + '</div>';
+  });
+
+  auth.onAuthStateChanged(user => {
+    if(!user) return;
+    db.collection("members").orderBy("order").get().then(snap => {
+      members = snap.docs.map(d => Object.assign({ id:d.id }, d.data()));
+      renderMemberGrid();
+
+      let saved = null;
+      try{ saved = JSON.parse(localStorage.getItem(MEMBER_KEY) || "null"); }catch(e){}
+      if(saved){
+        const m = members.find(x => x.id === saved.id);
+        if(m) return enterApp(m);
+      }
+    }).catch(err => {
+      memberGrid.innerHTML = '<div class="empty" style="grid-column:1/-1"><span class="big">⚠️</span>Klarte ikke å hente familiemedlemmer.<br>' + (err && err.message ? err.message : "") + '</div>';
+    });
+  });
+
+  // Offline-støtte: appen starter uten nett etter første besøk (kjøres uavhengig av innlogging)
+  if("serviceWorker" in navigator){
+    window.addEventListener("load", () => {
+      navigator.serviceWorker.register("sw.js").catch(() => {});
+    });
+  }
+
+  function startApp(member){
 
   // ---- Oppgaveplan: dag 0 = mandag ... 6 = søndag ----
   const TASKS = [
@@ -445,12 +681,29 @@
 
   const DAYS_SHORT = ["Man","Tir","Ons","Tor","Fre","Lør","Søn"];
   const DAYS_LONG  = ["Mandag","Tirsdag","Onsdag","Torsdag","Fredag","Lørdag","Søndag"];
-  const STORE_KEY  = "ukeoppgaver.v1";
+  const STORE_KEY  = "ukeoppgaver.v1." + member.id;
 
   // ---- Opptjening: totalen avledes av fullførte uker, aldri en løs teller ----
-  const EARN_KEY = "ukeoppgaver.opptjent.v1";
-  const OLD_KEY  = "ukeoppgaver.mal.v1";   // gammel Garmin-målnøkkel, migreres én gang
+  const EARN_KEY = "ukeoppgaver.opptjent.v1." + member.id;
+  const OLD_KEY  = "ukeoppgaver.v1";           // gammel, felles (ikke-navngitt) ukelagring
+  const OLD_EARN_KEY = "ukeoppgaver.opptjent.v1"; // gammel, felles opptjeningslagring
   const UKESATS  = 250;
+
+  // Data fra før innlogging fantes, lå under felles nøkler uten medlems-id.
+  // Den flyttes én gang, til den første som logger inn og henter den.
+  function claimLegacyData(){
+    let claimed = null;
+    try{ claimed = localStorage.getItem(LEGACY_CLAIMED_KEY); }catch(e){}
+    if(claimed) return;
+    try{
+      const oldState = JSON.parse(localStorage.getItem(OLD_KEY) || "null");
+      const oldEarn  = JSON.parse(localStorage.getItem(OLD_EARN_KEY) || "null");
+      if(oldState && !localStorage.getItem(STORE_KEY)) localStorage.setItem(STORE_KEY, JSON.stringify(oldState));
+      if(oldEarn && !localStorage.getItem(EARN_KEY)) localStorage.setItem(EARN_KEY, JSON.stringify(oldEarn));
+      if(oldState || oldEarn) localStorage.setItem(LEGACY_CLAIMED_KEY, member.id);
+    }catch(e){ /* ingenting å overta */ }
+  }
+  claimLegacyData();
 
   function loadEarnings(){
     try{
@@ -459,22 +712,26 @@
         return { ukesats: raw.ukesats || UKESATS, uker: raw.uker };
       }
     }catch(e){ /* tom eller ødelagt lagring */ }
-    try{
-      const old = JSON.parse(localStorage.getItem(OLD_KEY) || "null");
-      if(old && Array.isArray(old.uker)){
-        const migrated = { ukesats: old.ukesats || UKESATS, uker: old.uker };
-        localStorage.setItem(EARN_KEY, JSON.stringify(migrated));
-        return migrated;
-      }
-    }catch(e){ /* ingenting å migrere */ }
     return { ukesats: UKESATS, uker: [] };
   }
   function saveEarnings(){
     try{ localStorage.setItem(EARN_KEY, JSON.stringify(earnings)); }catch(e){}
+    db.collection("earnings").doc(member.id).set(earnings).catch(() => {});
   }
   function kr(n){ return Math.round(n).toLocaleString("nb-NO").replace(/,/g," ") + " kr"; }
 
   const earnings = loadEarnings();
+
+  // Hent skyversjonen og slå den sammen med det som er lagret på denne enheten:
+  // fullførte uker er en union (aldri mist en uke som er registrert et annet sted).
+  db.collection("earnings").doc(member.id).get().then(snap => {
+    if(!snap.exists) return;
+    const cloud = snap.data();
+    if(!cloud || !Array.isArray(cloud.uker)) return;
+    let changed = false;
+    cloud.uker.forEach(w => { if(earnings.uker.indexOf(w) === -1){ earnings.uker.push(w); changed = true; } });
+    if(changed){ saveEarnings(); render(); }
+  }).catch(() => {});
 
   // ---- Uke-hjelpere (mandag som ukestart) ----
   function mondayOf(d){
@@ -524,8 +781,19 @@
 
   function save(){
     try{ localStorage.setItem(STORE_KEY, JSON.stringify(state)); }catch(e){}
+    db.collection("state").doc(member.id).set(state).catch(() => {});
   }
   save(); // skriver over forrige ukes data med en gang uka har skiftet
+
+  // Hent skyversjonen av denne ukas avhukinger (samme medlem, annen enhet) og slå sammen
+  db.collection("state").doc(member.id).get().then(snap => {
+    if(!snap.exists) return;
+    const cloud = snap.data();
+    if(!cloud || cloud.week !== state.week || !cloud.done) return;
+    let changed = false;
+    Object.keys(cloud.done).forEach(id => { if(cloud.done[id] && !state.done[id]){ state.done[id] = true; changed = true; } });
+    if(changed){ save(); render(); }
+  }).catch(() => {});
 
   let selected  = todayIdx;
   let dismissed = false; // "Uka er fullført"-arket lukket for denne fullføringen
@@ -956,12 +1224,57 @@
     switchView("opptjent");
   });
 
+  // ---- Admin: se og rette denne ukas oppgaver for alle familiemedlemmer ----
+  function renderAdmin(){
+    if(!member.isAdmin) return;
+    const listEl = document.getElementById("adminList");
+    listEl.innerHTML = '<div class="muted small">Henter…</div>';
+
+    Promise.all(members.map(m =>
+      db.collection("state").doc(m.id).get().then(snap => ({ member:m, data:snap.exists ? snap.data() : null }))
+    )).then(results => {
+      listEl.innerHTML = "";
+      results.forEach(({ member:m, data }) => {
+        const done = (data && data.week === thisWeek && data.done) ? data.done : {};
+        const card = document.createElement("div");
+        card.className = "admin-member";
+        const doneCount = TASKS.filter(t => done[t.id]).length;
+        card.innerHTML =
+          '<h3>' + m.name + (m.isAdmin ? " · admin" : "") + '</h3>' +
+          '<div class="muted small" style="margin-bottom:4px">' + doneCount + '/' + TASKS.length + ' gjort denne uka</div>';
+        TASKS.forEach(t => {
+          const row = document.createElement("div");
+          row.className = "admin-task-row";
+          const isDoneNow = !!done[t.id];
+          row.innerHTML =
+            '<span class="check" style="' + (isDoneNow ? "background:var(--done);border-color:var(--done)" : "") + '"><svg viewBox="0 0 24 24" style="opacity:' + (isDoneNow ? "1" : "0") + '"><polyline points="4,12.5 9.5,18 20,6.5"/></svg></span>' +
+            '<span class="label">' + DAYS_SHORT[t.day] + ' · ' + t.emoji + ' ' + t.label + '</span>';
+          row.addEventListener("click", () => {
+            const ref = db.collection("state").doc(m.id);
+            const next = Object.assign({}, done);
+            if(next[t.id]) delete next[t.id]; else next[t.id] = true;
+            ref.set({ week:thisWeek, done:next }).then(() => {
+              if(m.id === member.id){ state.done = next; save(); render(); }
+              renderAdmin();
+            }).catch(() => {});
+          });
+          card.appendChild(row);
+        });
+        listEl.appendChild(card);
+      });
+      if(!results.length) listEl.innerHTML = '<div class="muted small">Ingen familiemedlemmer funnet.</div>';
+    }).catch(() => {
+      listEl.innerHTML = '<div class="muted small">Klarte ikke å hente data.</div>';
+    });
+  }
+
   // ---- Navigasjon ----
   const viewEls = {
     uke:      document.getElementById("viewUke"),
-    opptjent: document.getElementById("viewOpptjent")
+    opptjent: document.getElementById("viewOpptjent"),
+    admin:    document.getElementById("viewAdmin")
   };
-  const tabEls = [document.getElementById("tabUke"), document.getElementById("tabOpptjent")];
+  const tabEls = [document.getElementById("tabUke"), document.getElementById("tabOpptjent"), document.getElementById("tabAdmin")];
 
   function switchView(v){
     view = v;
@@ -974,10 +1287,12 @@
       renderWeekTable(s);
       animateHero(s.totalEarned);
     }
+    if(v === "admin") renderAdmin();
   }
 
   document.getElementById("tabUke").addEventListener("click", () => switchView("uke"));
   document.getElementById("tabOpptjent").addEventListener("click", () => switchView("opptjent"));
+  document.getElementById("tabAdmin").addEventListener("click", () => switchView("admin"));
   document.getElementById("earnCard").addEventListener("click", () => switchView("opptjent"));
 
   // Sikte-strek: peker trenger bare å være nærmest, ikke treffe streken
@@ -1014,12 +1329,7 @@
 
   render();
 
-  // Offline-støtte: appen starter uten nett etter første besøk
-  if("serviceWorker" in navigator){
-    window.addEventListener("load", () => {
-      navigator.serviceWorker.register("sw.js").catch(() => {});
-    });
-  }
+  } // slutt startApp
 })();
 </script>
 </body>
