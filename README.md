@@ -3,6 +3,19 @@
 Liten mobil-webapp med ukeoversikt over faste husoppgaver. Trykk på en dag i
 ukestripa for å se oppgavene, trykk på en oppgave for å hake den av.
 
+## Streak-stripa
+
+Ukestripa er bygget etter mønsteret fra Duolingo: hver dag som er helt ferdig
+blir en flamme-gul markør, og **nabodager smelter sammen til én sammenhengende
+stolpe** i stedet for å stå som løse prikker. Flammen øverst teller uker på
+rad, og søndag er belønningsplassen med en stjerne.
+
+Når alle ukas oppgaver er avhaket blir hele uka én gyllen stolpe med
+skimmer-animasjon, stjerna fylles, flammen får glorie (Duolingos markør for
+perfekt streak), og det spretter konfetti. Feiringsarket viser flammen med
+strålekrans, beløpet og hvor mange uker på rad. Alt av animasjon er slått av
+under `prefers-reduced-motion`.
+
 - Alt ligger i `index.html`: ingen rammeverk, ingen bygg-steg.
 - Hvert familiemedlem logger inn med navn + 4-sifret PIN, og avhukinger
   lagres både i nettleseren (`localStorage`, for offline-bruk) og i Supabase
