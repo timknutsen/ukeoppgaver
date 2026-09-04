@@ -28,6 +28,9 @@ editor → members → Insert row). Én rad per person:
 - `is_admin` (bool) — `true` for deg, `false` for barna
 - `member_order` (int) — rekkefølge på innloggingsskjermen
 
+Kjør `supabase/tasks_and_settings.sql` én gang i Supabase Studio → SQL Editor
+for å opprette `tasks`- og `settings`-tabellene (se "Oppgaveplan" under).
+
 Etter dette kan hvert familiemedlem logge inn med navn + PIN. Den som er
 `is_admin` får en ekstra "Admin"-fane hvor man ser og kan rette denne ukas
 avhukinger for alle. Den gamle localStorage-fremgangen fra før innlogging
@@ -42,21 +45,27 @@ være privat.
 
 ## Oppgaveplan
 
+Oppgavene og ukessatsen ligger i Supabase (`tasks`- og `settings`-tabellene),
+ikke hardkodet i JS lenger. Admin-fanen har en "Oppgaveplan"-boks der man
+kan endre dag/emoji/tittel/notat på hver oppgave, legge til eller slette
+oppgaver, og en "Ukessats"-boks for å endre kronebeløpet. Enhver endring
+lagrer til Supabase og laster appen på nytt.
+
+Utgangspunktet, seedet av `supabase/tasks_and_settings.sql`:
+
 | Man | Tir | Ons | Tor | Fre | Lør |
 |---|---|---|---|---|---|
 | Oppvask | Trappa | Toalett nede | Oppvask | Oppvask | Rydde og vaske rommet |
 
-Planen ligger i `TASKS`-lista øverst i skriptet i `index.html`. `day: 0` er
-mandag, `day: 6` er søndag. Legg til, fjern eller flytt oppgaver der.
-
 ## Opptjent
 
-Alle seks oppgaver i en uke = 250 kr. Totalen er aldri en løs teller — den
-regnes ut fra listen over fullførte uker i `localStorage`
-(`ukeoppgaver.opptjent.v1`, `{ ukesats, uker: [...] }`, der `uker` er
-mandagsdatoer). En ny uke legges bare til listen når mandagen skifter og alle
-seks oppgaver sto avhaket for uka som nettopp gikk; er uka fullført akkurat
-nå, vises de 250 kronene som "ikke låst" til mandagen passerer.
+Alle oppgavene i en uke = ukessatsen (250 kr som standard). Totalen er aldri
+en løs teller — den regnes ut fra listen over fullførte uker i
+`localStorage` (`ukeoppgaver.opptjent.v1.<medlem>`, `{ ukesats, uker: [...] }`,
+der `uker` er mandagsdatoer), synket med Supabase. En ny uke legges bare til
+listen når mandagen skifter og alle oppgaver sto avhaket for uka som nettopp
+gikk; er uka fullført akkurat nå, vises kronene som "ikke låst" til mandagen
+passerer.
 
 "Opptjent"-fanen viser totalen, antall perfekte uker, lengste rekke og en
 kumulativ kurve med én posisjon per kalenderuke — bomma uker blir flate

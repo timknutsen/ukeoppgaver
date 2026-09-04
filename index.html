@@ -483,6 +483,22 @@
   <h1 class="title">Admin</h1>
   <div class="sub">Se og rette denne ukas oppgaver for alle</div>
   <div id="adminList" style="margin-top:16px"></div>
+
+  <div class="card" style="margin-top:20px">
+    <div class="card-title" style="margin-bottom:10px">Oppgaveplan</div>
+    <div id="adminTasks"></div>
+    <button type="button" class="reset" id="adminAddTask" style="margin-top:10px">+ Ny oppgave</button>
+  </div>
+
+  <div class="card">
+    <div class="card-title" style="margin-bottom:10px">Ukessats</div>
+    <div style="display:flex; gap:8px; align-items:center">
+      <input type="number" id="adminUkesats" min="0" step="10"
+        style="flex:1; background:var(--card-2); border:1px solid var(--line); color:var(--txt); border-radius:12px; padding:10px 12px; font:700 1rem system-ui">
+      <button type="button" class="reset" id="adminSaveUkesats">Lagre</button>
+    </div>
+    <div class="muted small" style="margin-top:8px">Kroner for en uke der alle oppgaver er avhaket.</div>
+  </div>
 </main>
 
 <nav class="tabbar" id="tabbar">
@@ -618,7 +634,15 @@ const db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
     document.getElementById("whoamiName").textContent = m.name;
     document.getElementById("viewUke").hidden = false;
     document.getElementById("tabAdmin").hidden = !m.isAdmin;
-    startApp(m);
+
+    Promise.all([
+      db.from("tasks").select("*").order("day").order("task_order"),
+      db.from("settings").select("*").eq("id", "global").maybeSingle()
+    ]).then(([tasksRes, settingsRes]) => {
+      const tasks = (tasksRes.data || []).map(r => ({ id:r.id, day:r.day, emoji:r.emoji, label:r.label, note:r.note, order:r.task_order }));
+      const ukesats = (settingsRes.data && settingsRes.data.ukesats) || 250;
+      startApp(m, tasks, ukesats);
+    });
   }
 
   whoamiEl.addEventListener("click", () => {
@@ -650,18 +674,9 @@ const db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
     });
   }
 
-  function startApp(member){
+  function startApp(member, TASKS, UKESATS){
 
-  // ---- Oppgaveplan: dag 0 = mandag ... 6 = søndag ----
-  const TASKS = [
-    { id:"oppvask-man",  day:0, emoji:"🍽️", label:"Ta oppvasken",        note:"Tømme og fylle oppvaskmaskin" },
-    { id:"trapp",        day:1, emoji:"🧹", label:"Vaske trappa",         note:"1 gang i uka" },
-    { id:"bad",          day:2, emoji:"🚽", label:"Vaske toalett nede",   note:"Do, servant, gulv" },
-    { id:"oppvask-tor",  day:3, emoji:"🍽️", label:"Ta oppvasken",        note:"Tømme og fylle oppvaskmaskin" },
-    { id:"oppvask-fre",  day:4, emoji:"🍽️", label:"Ta oppvasken",        note:"Tømme og fylle oppvaskmaskin" },
-    { id:"rom",          day:5, emoji:"🛏️", label:"Rydde og vaske rommet", note:"Rydd først, støvsug etterpå" }
-  ];
-
+  // ---- Oppgaveplan: dag 0 = mandag ... 6 = søndag. Lastes fra Supabase (tasks-tabellen). ----
   const DAYS_SHORT = ["Man","Tir","Ons","Tor","Fre","Lør","Søn"];
   const DAYS_LONG  = ["Mandag","Tirsdag","Onsdag","Torsdag","Fredag","Lørdag","Søndag"];
   const STORE_KEY  = "ukeoppgaver.v1." + member.id;
@@ -670,7 +685,6 @@ const db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
   const EARN_KEY = "ukeoppgaver.opptjent.v1." + member.id;
   const OLD_KEY  = "ukeoppgaver.v1";           // gammel, felles (ikke-navngitt) ukelagring
   const OLD_EARN_KEY = "ukeoppgaver.opptjent.v1"; // gammel, felles opptjeningslagring
-  const UKESATS  = 250;
 
   // Data fra før innlogging fantes, lå under felles nøkler uten medlems-id.
   // Den flyttes én gang, til den første som logger inn og henter den.
@@ -1246,6 +1260,69 @@ const db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
     });
   }
 
+  // ---- Admin: rediger oppgaveplan (tasks-tabellen) og ukessats (settings-tabellen) ----
+  function renderAdminConfig(){
+    if(!member.isAdmin) return;
+    const tasksEl = document.getElementById("adminTasks");
+    document.getElementById("adminUkesats").value = UKESATS;
+
+    function dayOptions(selected){
+      return DAYS_LONG.map((d,i) => '<option value="' + i + '"' + (i === selected ? " selected" : "") + '>' + d + '</option>').join("");
+    }
+
+    function taskRow(t){
+      const row = document.createElement("div");
+      row.className = "admin-task-row";
+      row.style.gap = "8px";
+      row.innerHTML =
+        '<select class="t-day" style="background:var(--card-2); border:1px solid var(--line); color:var(--txt); border-radius:8px; padding:6px">' + dayOptions(t.day) + '</select>' +
+        '<input class="t-emoji" value="' + t.emoji + '" style="width:38px; text-align:center; background:var(--card-2); border:1px solid var(--line); color:var(--txt); border-radius:8px; padding:6px">' +
+        '<input class="t-label" value="' + t.label + '" placeholder="Oppgave" style="flex:1; min-width:80px; background:var(--card-2); border:1px solid var(--line); color:var(--txt); border-radius:8px; padding:6px">' +
+        '<button type="button" class="pin-back t-del" style="padding:6px 8px">✕</button>';
+      const noteRow = document.createElement("input");
+      noteRow.className = "t-note";
+      noteRow.value = t.note || "";
+      noteRow.placeholder = "Notat (valgfritt)";
+      noteRow.style = "width:100%; margin-top:6px; background:var(--card-2); border:1px solid var(--line); color:var(--txt); border-radius:8px; padding:6px 8px; font-size:.82rem";
+      const wrap = document.createElement("div");
+      wrap.style = "border-bottom:1px solid color-mix(in srgb, var(--line) 55%, transparent); padding:8px 0";
+      wrap.appendChild(row);
+      wrap.appendChild(noteRow);
+
+      function saveTask(){
+        db.from("tasks").upsert({
+          id: t.id, day: Number(row.querySelector(".t-day").value),
+          emoji: row.querySelector(".t-emoji").value.trim() || "✅",
+          label: row.querySelector(".t-label").value.trim() || "Oppgave",
+          note: noteRow.value.trim(),
+          task_order: t.order || 0
+        }).then(() => location.reload());
+      }
+      row.querySelector(".t-day").addEventListener("change", saveTask);
+      row.querySelector(".t-emoji").addEventListener("blur", saveTask);
+      row.querySelector(".t-label").addEventListener("blur", saveTask);
+      noteRow.addEventListener("blur", saveTask);
+      row.querySelector(".t-del").addEventListener("click", () => {
+        if(!confirm('Slette "' + t.label + '"?')) return;
+        db.from("tasks").delete().eq("id", t.id).then(() => location.reload());
+      });
+      return wrap;
+    }
+
+    tasksEl.innerHTML = "";
+    TASKS.forEach(t => tasksEl.appendChild(taskRow(t)));
+  }
+
+  document.getElementById("adminAddTask").addEventListener("click", () => {
+    const id = "oppgave-" + Date.now();
+    db.from("tasks").upsert({ id, day:0, emoji:"✅", label:"Ny oppgave", note:"", task_order: TASKS.length })
+      .then(() => location.reload());
+  });
+  document.getElementById("adminSaveUkesats").addEventListener("click", () => {
+    const val = Math.max(0, Number(document.getElementById("adminUkesats").value) || 0);
+    db.from("settings").upsert({ id:"global", ukesats:val }).then(() => location.reload());
+  });
+
   // ---- Navigasjon ----
   const viewEls = {
     uke:      document.getElementById("viewUke"),
@@ -1265,7 +1342,7 @@ const db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
       renderWeekTable(s);
       animateHero(s.totalEarned);
     }
-    if(v === "admin") renderAdmin();
+    if(v === "admin"){ renderAdmin(); renderAdminConfig(); }
   }
 
   document.getElementById("tabUke").addEventListener("click", () => switchView("uke"));
