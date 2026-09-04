@@ -295,6 +295,7 @@
   }
   .tab svg{width:22px; height:22px}
   .tab.active{color:var(--accent)}
+  .tab[hidden]{display:none}   /* display:flex over slår ellers hidden-attributtet */
 
   @media (prefers-reduced-motion: reduce){
     *{animation-duration:.01ms !important; transition-duration:.01ms !important}
@@ -339,6 +340,53 @@
   .admin-task-row .check{width:24px; height:24px}
   .admin-task-row .check svg{width:13px; height:13px}
   .admin-task-row .label{flex:1; font-size:.86rem; font-weight:600}
+
+  /* Pengeoversikt i admin */
+  .admin-mini-row{display:flex; gap:8px; margin-top:12px}
+  .admin-mini{
+    flex:1; background:var(--card-2); border:1px solid var(--line); border-radius:12px; padding:9px 10px;
+  }
+  .admin-member .admin-mini{background:var(--card)}
+  .admin-mini-label{color:var(--muted); font-size:.66rem; font-weight:650; letter-spacing:.03em; text-transform:uppercase}
+  .admin-mini-value{font-size:1.02rem; font-weight:800; letter-spacing:-.02em; margin-top:2px; font-variant-numeric:tabular-nums}
+  .admin-mini-value.owed{color:var(--done)}
+  .admin-head{display:flex; align-items:center; justify-content:space-between; gap:10px}
+  .admin-owed-badge{
+    flex:0 0 auto; border-radius:999px; padding:5px 10px; font:800 .78rem system-ui;
+    background:color-mix(in srgb, var(--done) 16%, transparent); color:var(--done);
+    border:1px solid color-mix(in srgb, var(--done) 38%, transparent); font-variant-numeric:tabular-nums;
+  }
+  .admin-actions{display:flex; flex-wrap:wrap; gap:8px; margin-top:12px}
+  .admin-btn{
+    appearance:none; background:var(--card); border:1px solid var(--line); color:var(--txt);
+    border-radius:999px; padding:8px 13px; font:700 .78rem system-ui; cursor:pointer;
+  }
+  .admin-btn:active{transform:scale(.96)}
+  .admin-btn.pay{
+    background:linear-gradient(160deg,var(--accent),var(--accent-2)); color:#04121f; border-color:transparent;
+  }
+  .admin-ledger{margin-top:12px; border-top:1px solid var(--line); padding-top:8px}
+  .admin-ledger summary{
+    cursor:pointer; color:var(--muted); font-size:.76rem; font-weight:650; list-style:none;
+    display:flex; align-items:center; gap:6px;
+  }
+  .admin-ledger summary::-webkit-details-marker{display:none}
+  .admin-ledger summary::after{content:'▾'; font-size:.68rem; opacity:.8}
+  .admin-ledger[open] summary::after{content:'▴'}
+  .led-row{
+    display:flex; align-items:baseline; justify-content:space-between; gap:10px;
+    padding:7px 0; border-bottom:1px solid color-mix(in srgb, var(--line) 45%, transparent); font-size:.8rem;
+  }
+  .led-row:last-child{border-bottom:none}
+  .led-amt{font-weight:800; font-variant-numeric:tabular-nums}
+  .led-amt.plus{color:var(--done)}
+  .led-amt.minus{color:var(--muted)}
+  .led-del{
+    appearance:none; background:none; border:none; color:var(--muted); cursor:pointer;
+    font-size:.9rem; padding:0 2px; line-height:1;
+  }
+  .admin-week-bar{height:5px; border-radius:999px; background:var(--line); overflow:hidden; margin-top:8px}
+  .admin-week-bar i{display:block; height:100%; border-radius:999px; background:linear-gradient(90deg,var(--accent),var(--done))}
 </style>
 </head>
 <body>
@@ -481,8 +529,18 @@
 
 <main id="viewAdmin" class="view" hidden>
   <h1 class="title">Admin</h1>
-  <div class="sub">Se og rette denne ukas oppgaver for alle</div>
-  <div id="adminList" style="margin-top:16px"></div>
+  <div class="sub">Pengebeholdning, uke og oppgaveplan</div>
+
+  <div class="card" id="adminSummary" style="margin-top:16px" hidden>
+    <div class="row-between">
+      <span class="card-title">Til gode i huset</span>
+      <span class="muted small" id="adminOwedNote"></span>
+    </div>
+    <div class="hero-value" id="adminOwedTotal" style="font-size:2.3rem; margin-top:6px">0 kr</div>
+    <div class="admin-mini-row" id="adminOwedSplit"></div>
+  </div>
+
+  <div id="adminList"></div>
 
   <div class="card" style="margin-top:20px">
     <div class="card-title" style="margin-bottom:10px">Oppgaveplan</div>
@@ -553,13 +611,19 @@ const db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
     return name.trim().split(/\s+/).slice(0,2).map(w => w[0].toUpperCase()).join("");
   }
 
+  // Navn, oppgavetekst og notater redigeres av brukerne selv og havner i innerHTML
+  function esc(s){
+    return String(s == null ? "" : s)
+      .replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+  }
+
   function renderMemberGrid(){
     memberGrid.innerHTML = "";
     members.forEach(m => {
       const b = document.createElement("button");
       b.type = "button";
       b.className = "member-btn";
-      b.innerHTML = '<span class="member-avatar">' + initials(m.name) + '</span><span>' + m.name + '</span>';
+      b.innerHTML = '<span class="member-avatar">' + esc(initials(m.name)) + '</span><span>' + esc(m.name) + '</span>';
       b.addEventListener("click", () => openPinFor(m));
       memberGrid.appendChild(b);
     });
@@ -632,8 +696,13 @@ const db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
     whoamiEl.hidden = false;
     document.getElementById("whoamiAvatar").textContent = initials(m.name);
     document.getElementById("whoamiName").textContent = m.name;
-    document.getElementById("viewUke").hidden = false;
+
+    // Admin har ingen egne oppgaver: da vises bare Admin-fanen.
     document.getElementById("tabAdmin").hidden = !m.isAdmin;
+    document.getElementById("tabUke").hidden = !!m.isAdmin;
+    document.getElementById("tabOpptjent").hidden = !!m.isAdmin;
+    document.getElementById("viewUke").hidden = !!m.isAdmin;
+    document.getElementById("viewAdmin").hidden = !m.isAdmin;
 
     Promise.all([
       db.from("tasks").select("*").order("day").order("task_order"),
@@ -765,8 +834,9 @@ const db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
   let state = { week:thisWeek, done:{} };
   if(prevRaw && prevRaw.week === thisWeek && prevRaw.done) state = prevRaw;
 
-  // Uka skiftet siden sist: hvis forrige uke var 100% fullført, legg den i opptjeningen
-  if(prevRaw && prevRaw.week && prevRaw.week !== thisWeek && prevRaw.done){
+  // Uka skiftet siden sist: hvis forrige uke var 100% fullført, legg den i opptjeningen.
+  // Admin har ingen oppgaver, og en tom oppgaveliste teller aldri som fullført uke.
+  if(!member.isAdmin && TASKS.length && prevRaw && prevRaw.week && prevRaw.week !== thisWeek && prevRaw.done){
     const doneCount = TASKS.filter(t => prevRaw.done[t.id]).length;
     if(doneCount === TASKS.length && earnings.uker.indexOf(prevRaw.week) === -1){
       earnings.uker.push(prevRaw.week);
@@ -774,18 +844,26 @@ const db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
     }
   }
 
-  function save(){
+  function saveLocal(){
     try{ localStorage.setItem(STORE_KEY, JSON.stringify(state)); }catch(e){}
+  }
+  function save(){
+    saveLocal();
     db.from("state").upsert({ member_id:member.id, week:state.week, done:state.done }).then(() => {});
   }
-  save(); // skriver over forrige ukes data med en gang uka har skiftet
+  saveLocal(); // lokalt med en gang uka har skiftet; skyen røres først etter at den er lest
 
-  // Hent skyversjonen av denne ukas avhukinger (samme medlem, annen enhet) og slå sammen
-  db.from("state").select("*").eq("member_id", member.id).maybeSingle().then(({ data:cloud }) => {
-    if(!cloud || cloud.week !== state.week || !cloud.done) return;
-    let changed = false;
-    Object.keys(cloud.done).forEach(id => { if(cloud.done[id] && !state.done[id]){ state.done[id] = true; changed = true; } });
-    if(changed){ save(); render(); }
+  // Hent skyversjonen av denne ukas avhukinger (samme medlem, annen enhet) og slå sammen.
+  // Skyen må leses før den skrives: ellers ville en ny enhet med tom lokal tilstand
+  // rekke å blanke ut avhukinger som ble gjort et annet sted.
+  db.from("state").select("*").eq("member_id", member.id).maybeSingle().then(({ data:cloud, error }) => {
+    if(error) return;   // fikk ikke lest: la skyen stå urørt til neste avhuking
+    if(cloud && cloud.week === state.week && cloud.done){
+      let changed = false;
+      Object.keys(cloud.done).forEach(id => { if(cloud.done[id] && !state.done[id]){ state.done[id] = true; changed = true; } });
+      if(changed){ saveLocal(); render(); }
+    }
+    save();   // skyen settes til den sammenslåtte tilstanden
   });
 
   let selected  = todayIdx;
@@ -812,7 +890,7 @@ const db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
   function stats(){
     const total     = TASKS.length;
     const doneCount = TASKS.filter(t => isDone(t.id)).length;
-    const allDone   = doneCount === total;
+    const allDone   = total > 0 && doneCount === total;
     const weeks     = earnings.uker.slice().sort();
     const banked    = weeks.length * earnings.ukesats;
     // Denne uka er tjent, men låses først på mandag
@@ -896,8 +974,8 @@ const db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
       li.setAttribute("aria-checked", String(isDone(t.id)));
       li.innerHTML =
         '<span class="check"><svg viewBox="0 0 24 24"><polyline points="4,12.5 9.5,18 20,6.5"/></svg></span>' +
-        '<span class="emoji">' + t.emoji + '</span>' +
-        '<span class="label">' + t.label + '<span class="note">' + t.note + '</span></span>';
+        '<span class="emoji">' + esc(t.emoji) + '</span>' +
+        '<span class="label">' + esc(t.label) + '<span class="note">' + esc(t.note) + '</span></span>';
 
       const toggle = () => {
         if(state.done[t.id]) delete state.done[t.id];
@@ -1217,44 +1295,165 @@ const db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
     switchView("opptjent");
   });
 
-  // ---- Admin: se og rette denne ukas oppgaver for alle familiemedlemmer ----
+  // ---- Admin: pengebeholdning, ukesoversikt og utbetalinger ----
+  function addLedger(memberId, amount, note){
+    return db.from("ledger").insert({ member_id:memberId, amount:Math.round(amount), note:note || "" })
+      .then(() => renderAdmin());
+  }
+  function askAmount(question, suggested){
+    const raw = prompt(question, suggested == null ? "" : String(suggested));
+    if(raw === null) return null;
+    const n = Math.round(Number(String(raw).replace(",", ".").replace(/[^\d.-]/g, "")));
+    return (isFinite(n) && n > 0) ? n : null;
+  }
+  function setWeekFor(memberId, done){
+    return db.from("state").upsert({ member_id:memberId, week:thisWeek, done }).then(() => {
+      if(memberId === member.id){ state.done = done; save(); render(); }
+      renderAdmin();
+    });
+  }
+
   function renderAdmin(){
     if(!member.isAdmin) return;
     const listEl = document.getElementById("adminList");
     listEl.innerHTML = '<div class="muted small">Henter…</div>';
 
-    Promise.all(members.map(m =>
-      db.from("state").select("*").eq("member_id", m.id).maybeSingle().then(({ data }) => ({ member:m, data:data || null }))
-    )).then(results => {
+    Promise.all([
+      db.from("state").select("*"),
+      db.from("earnings").select("*"),
+      db.from("ledger").select("*").order("created_at", { ascending:false })
+    ]).then(([stateRes, earnRes, ledRes]) => {
+      const stateBy = {}, earnBy = {}, ledBy = {};
+      (stateRes.data || []).forEach(r => { stateBy[r.member_id] = r; });
+      (earnRes.data  || []).forEach(r => { earnBy[r.member_id]  = r; });
+      (ledRes.data   || []).forEach(r => { (ledBy[r.member_id] = ledBy[r.member_id] || []).push(r); });
+
+      const kids = members.filter(m => !m.isAdmin);
+      let sumOwed = 0, sumEarned = 0, sumPaid = 0;
+
       listEl.innerHTML = "";
-      results.forEach(({ member:m, data }) => {
-        const done = (data && data.week === thisWeek && data.done) ? data.done : {};
+      kids.forEach(m => {
+        const st   = stateBy[m.id];
+        const done = (st && st.week === thisWeek && st.done) ? st.done : {};
+        const doneCount = TASKS.filter(t => done[t.id]).length;
+        const pct  = TASKS.length ? Math.round(doneCount / TASKS.length * 100) : 0;
+
+        const er    = earnBy[m.id] || {};
+        const uker  = Array.isArray(er.uker) ? er.uker : [];
+        const sats  = er.ukesats || UKESATS;
+        const led   = ledBy[m.id] || [];
+        const bonus = led.reduce((a,l) => a + (l.amount > 0 ? l.amount : 0), 0);
+        const paid  = led.reduce((a,l) => a - (l.amount < 0 ? l.amount : 0), 0);
+        const earned = uker.length * sats + bonus;
+        const owed   = earned - paid;
+
+        sumOwed += owed; sumEarned += earned; sumPaid += paid;
+
         const card = document.createElement("div");
         card.className = "admin-member";
-        const doneCount = TASKS.filter(t => done[t.id]).length;
         card.innerHTML =
-          '<h3>' + m.name + (m.isAdmin ? " · admin" : "") + '</h3>' +
-          '<div class="muted small" style="margin-bottom:4px">' + doneCount + '/' + TASKS.length + ' gjort denne uka</div>';
+          '<div class="admin-head">' +
+            '<h3>' + esc(m.name) + '</h3>' +
+            '<span class="admin-owed-badge">' + kr(owed) + ' til gode</span>' +
+          '</div>' +
+          '<div class="muted small">' + uker.length + (uker.length === 1 ? " perfekt uke" : " perfekte uker") +
+            ' · lengste rekke ' + longestStreak(uker.slice().sort()) + '</div>' +
+          '<div class="admin-mini-row">' +
+            '<div class="admin-mini"><div class="admin-mini-label">Opptjent</div><div class="admin-mini-value">' + kr(earned) + '</div></div>' +
+            '<div class="admin-mini"><div class="admin-mini-label">Utbetalt</div><div class="admin-mini-value">' + kr(paid) + '</div></div>' +
+          '</div>' +
+          '<div class="muted small" style="margin-top:14px">Uke ' + isoWeekNo(now) + ' · ' + doneCount + '/' + TASKS.length + ' gjort</div>' +
+          '<div class="admin-week-bar"><i style="width:' + pct + '%"></i></div>';
+
         TASKS.forEach(t => {
           const row = document.createElement("div");
           row.className = "admin-task-row";
           const isDoneNow = !!done[t.id];
           row.innerHTML =
             '<span class="check" style="' + (isDoneNow ? "background:var(--done);border-color:var(--done)" : "") + '"><svg viewBox="0 0 24 24" style="opacity:' + (isDoneNow ? "1" : "0") + '"><polyline points="4,12.5 9.5,18 20,6.5"/></svg></span>' +
-            '<span class="label">' + DAYS_SHORT[t.day] + ' · ' + t.emoji + ' ' + t.label + '</span>';
+            '<span class="label">' + DAYS_SHORT[t.day] + ' · ' + esc(t.emoji) + ' ' + esc(t.label) + '</span>';
           row.addEventListener("click", () => {
             const next = Object.assign({}, done);
             if(next[t.id]) delete next[t.id]; else next[t.id] = true;
-            db.from("state").upsert({ member_id:m.id, week:thisWeek, done:next }).then(() => {
-              if(m.id === member.id){ state.done = next; save(); render(); }
-              renderAdmin();
-            });
+            setWeekFor(m.id, next);
           });
           card.appendChild(row);
         });
+
+        const actions = document.createElement("div");
+        actions.className = "admin-actions";
+        actions.innerHTML =
+          (owed > 0 ? '<button type="button" class="admin-btn pay" data-act="payall">Betal ut ' + kr(owed) + '</button>' : '') +
+          '<button type="button" class="admin-btn" data-act="paysome">Delbetaling…</button>' +
+          '<button type="button" class="admin-btn" data-act="bonus">+ Bonus…</button>' +
+          '<button type="button" class="admin-btn" data-act="allweek">Hak av hele uka</button>' +
+          '<button type="button" class="admin-btn" data-act="clearweek">Nullstill uka</button>';
+
+        actions.addEventListener("click", e => {
+          const btn = e.target.closest("[data-act]");
+          if(!btn) return;
+          const act = btn.dataset.act;
+
+          if(act === "payall"){
+            if(!confirm("Registrere at " + m.name + " har fått utbetalt " + kr(owed) + "?")) return;
+            addLedger(m.id, -owed, "Utbetalt");
+          } else if(act === "paysome"){
+            const n = askAmount("Hvor mye er utbetalt til " + m.name + "? (kr)", owed > 0 ? owed : "");
+            if(n) addLedger(m.id, -n, "Utbetalt");
+          } else if(act === "bonus"){
+            const n = askAmount("Bonus til " + m.name + "? (kr)", 50);
+            if(!n) return;
+            const why = prompt("Hva er bonusen for?", "Ekstra innsats") || "Bonus";
+            addLedger(m.id, n, why);
+          } else if(act === "allweek"){
+            const all = {};
+            TASKS.forEach(t => { all[t.id] = true; });
+            setWeekFor(m.id, all);
+          } else if(act === "clearweek"){
+            if(!confirm("Nullstille denne ukas oppgaver for " + m.name + "?")) return;
+            setWeekFor(m.id, {});
+          }
+        });
+        card.appendChild(actions);
+
+        if(led.length){
+          const hist = document.createElement("details");
+          hist.className = "admin-ledger";
+          hist.innerHTML =
+            '<summary>Pengehistorikk (' + led.length + ')</summary>' +
+            led.slice(0, 12).map(l =>
+              '<div class="led-row">' +
+                '<span>' + esc(l.note || (l.amount < 0 ? "Utbetalt" : "Bonus")) +
+                  '<span class="muted"> · ' + new Date(l.created_at).toLocaleDateString("nb-NO") + '</span></span>' +
+                '<span><span class="led-amt ' + (l.amount < 0 ? "minus" : "plus") + '">' +
+                  (l.amount < 0 ? "−" : "+") + kr(Math.abs(l.amount)) + '</span>' +
+                  ' <button type="button" class="led-del" data-del="' + l.id + '" title="Angre">✕</button></span>' +
+              '</div>'
+            ).join("");
+          hist.addEventListener("click", e => {
+            const del = e.target.closest("[data-del]");
+            if(!del) return;
+            if(!confirm("Slette denne posteringen?")) return;
+            db.from("ledger").delete().eq("id", Number(del.dataset.del)).then(() => renderAdmin());
+          });
+          card.appendChild(hist);
+        }
+
         listEl.appendChild(card);
       });
-      if(!results.length) listEl.innerHTML = '<div class="muted small">Ingen familiemedlemmer funnet.</div>';
+
+      if(!kids.length){
+        listEl.innerHTML = '<div class="card muted small">Ingen barn er lagt inn ennå. Legg dem til i <b>members</b>-tabellen i Supabase.</div>';
+      }
+
+      // Med bare ett barn sier totalen nøyaktig det samme som kortet under
+      document.getElementById("adminSummary").hidden = kids.length < 2;
+      document.getElementById("adminOwedTotal").textContent = kr(sumOwed);
+      document.getElementById("adminOwedNote").textContent =
+        kids.length + (kids.length === 1 ? " person" : " personer");
+      document.getElementById("adminOwedSplit").innerHTML =
+        '<div class="admin-mini"><div class="admin-mini-label">Opptjent totalt</div><div class="admin-mini-value">' + kr(sumEarned) + '</div></div>' +
+        '<div class="admin-mini"><div class="admin-mini-label">Utbetalt totalt</div><div class="admin-mini-value">' + kr(sumPaid) + '</div></div>';
     }).catch(() => {
       listEl.innerHTML = '<div class="muted small">Klarte ikke å hente data.</div>';
     });
@@ -1276,8 +1475,8 @@ const db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
       row.style.gap = "8px";
       row.innerHTML =
         '<select class="t-day" style="background:var(--card-2); border:1px solid var(--line); color:var(--txt); border-radius:8px; padding:6px">' + dayOptions(t.day) + '</select>' +
-        '<input class="t-emoji" value="' + t.emoji + '" style="width:38px; text-align:center; background:var(--card-2); border:1px solid var(--line); color:var(--txt); border-radius:8px; padding:6px">' +
-        '<input class="t-label" value="' + t.label + '" placeholder="Oppgave" style="flex:1; min-width:80px; background:var(--card-2); border:1px solid var(--line); color:var(--txt); border-radius:8px; padding:6px">' +
+        '<input class="t-emoji" value="' + esc(t.emoji) + '" style="width:38px; text-align:center; background:var(--card-2); border:1px solid var(--line); color:var(--txt); border-radius:8px; padding:6px">' +
+        '<input class="t-label" value="' + esc(t.label) + '" placeholder="Oppgave" style="flex:1; min-width:80px; background:var(--card-2); border:1px solid var(--line); color:var(--txt); border-radius:8px; padding:6px">' +
         '<button type="button" class="pin-back t-del" style="padding:6px 8px">✕</button>';
       const noteRow = document.createElement("input");
       noteRow.className = "t-note";
@@ -1383,6 +1582,7 @@ const db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
   });
 
   render();
+  if(member.isAdmin) switchView("admin");   // admin har ingen egne oppgaver
 
   } // slutt startApp
 })();

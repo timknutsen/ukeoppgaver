@@ -28,13 +28,31 @@ editor → members → Insert row). Én rad per person:
 - `is_admin` (bool) — `true` for deg, `false` for barna
 - `member_order` (int) — rekkefølge på innloggingsskjermen
 
-Kjør `supabase/tasks_and_settings.sql` én gang i Supabase Studio → SQL Editor
-for å opprette `tasks`- og `settings`-tabellene (se "Oppgaveplan" under).
+Tabellene er allerede opprettet i prosjektet: `members`, `state`, `earnings`,
+`tasks`, `settings` og `ledger`. `supabase/schema.sql` er kopien av
+oppsettet, hvis alt må settes opp på nytt et annet sted.
 
-Etter dette kan hvert familiemedlem logge inn med navn + PIN. Den som er
-`is_admin` får en ekstra "Admin"-fane hvor man ser og kan rette denne ukas
-avhukinger for alle. Den gamle localStorage-fremgangen fra før innlogging
-ble lagt til, overtas automatisk av den første som logger inn.
+Etter dette kan hvert familiemedlem logge inn med navn + PIN. Den gamle
+localStorage-fremgangen fra før innlogging ble lagt til, overtas automatisk
+av den første som logger inn.
+
+## Admin
+
+Den som er `is_admin` har ingen egne oppgaver: da vises bare Admin-fanen,
+ikke Uke og Opptjent. Admin-fanen har, per barn:
+
+- **Pengebeholdning** — til gode, opptjent totalt og utbetalt totalt, pluss
+  antall perfekte uker og lengste rekke. Er det flere barn, vises også en
+  sum for hele huset øverst.
+- **Denne uka** — hvor mange oppgaver som er gjort, med avhukingsbokser som
+  kan rettes direkte, og knappene "Hak av hele uka" / "Nullstill uka".
+- **Utbetalinger og bonus** — "Betal ut" fører hele saldoen som utbetalt,
+  "Delbetaling…" et valgfritt beløp, og "+ Bonus…" legger til kroner utenom
+  ukessatsen (med en begrunnelse). Alt havner i `ledger`-tabellen og vises
+  i "Pengehistorikk", der en feilføring kan slettes.
+- **Oppgaveplan og ukessats** — se under.
+
+Regnestykket: `til gode = perfekte uker × ukessats + bonuser − utbetalt`.
 
 **Merk om sikkerhet:** PIN-koden er en enkel gate mot søsken som haker av
 hverandres oppgaver — ikke ekte tilgangskontroll. Alle med den offentlige

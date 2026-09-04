@@ -1,6 +1,6 @@
--- Flytter oppgaveplanen og ukessatsen fra hardkodet JS til Supabase, slik at
--- admin kan redigere dem i appen i stedet for å be om en kodeendring.
--- Lim denne inn i Supabase Studio -> SQL Editor -> Run.
+-- Oppgaveplan, ukessats og pengebevegelser. Allerede kjørt i prosjektet;
+-- ligger her i tilfelle alt må settes opp på nytt et annet sted.
+-- (members/state/earnings er satt opp fra før, se README.)
 
 create table if not exists tasks (
   id text primary key,
@@ -16,8 +16,20 @@ create table if not exists settings (
   ukesats int not null default 250
 );
 
+-- Pengebevegelser: positivt beløp = bonus/tillegg, negativt = utbetaling.
+create table if not exists ledger (
+  id bigint generated always as identity primary key,
+  member_id text not null references members(id) on delete cascade,
+  amount int not null,
+  note text not null default '',
+  created_at timestamptz not null default now()
+);
+
+create index if not exists ledger_member_idx on ledger (member_id, created_at desc);
+
 alter table tasks enable row level security;
 alter table settings enable row level security;
+alter table ledger enable row level security;
 
 create policy "tasks are readable" on tasks for select using (true);
 create policy "tasks are writable" on tasks for insert with check (true);
@@ -27,6 +39,10 @@ create policy "tasks are deletable" on tasks for delete using (true);
 create policy "settings are readable" on settings for select using (true);
 create policy "settings are writable" on settings for insert with check (true);
 create policy "settings are updatable" on settings for update using (true);
+
+create policy "ledger is readable" on ledger for select using (true);
+create policy "ledger is writable" on ledger for insert with check (true);
+create policy "ledger is deletable" on ledger for delete using (true);
 
 -- Samme seks oppgaver appen hadde hardkodet fra før.
 insert into tasks (id, day, emoji, label, note, task_order) values
