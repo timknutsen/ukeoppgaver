@@ -1,5 +1,5 @@
 // Enkel offline-cache. Bump CACHE ved endringer i appen.
-const CACHE = "ukeoppgaver-v8";
+const CACHE = "ukeoppgaver-v9";
 const ASSETS = [
   "./",
   "./index.html",

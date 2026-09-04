@@ -10,11 +10,22 @@ blir en flamme-gul markør, og **nabodager smelter sammen til én sammenhengende
 stolpe** i stedet for å stå som løse prikker. Flammen øverst teller uker på
 rad, og søndag er belønningsplassen med en stjerne.
 
+Stjerna sitter alltid på ukas siste dag, enten den dagen er fri eller har en
+oppgave — den er belønningsplassen, ikke en dag i seg selv.
+
 Når alle ukas oppgaver er avhaket blir hele uka én gyllen stolpe med
 skimmer-animasjon, stjerna fylles, flammen får glorie (Duolingos markør for
 perfekt streak), og det spretter konfetti. Feiringsarket viser flammen med
 strålekrans, beløpet og hvor mange uker på rad. Alt av animasjon er slått av
 under `prefers-reduced-motion`.
+
+## Lyd
+
+Avhuking gir et kort stigende «pling», å fjerne avhukingen gir en dempet
+nedadgående tone, og perfekt uke gir en liten fanfare. Tonene lages i Web
+Audio underveis — ingen lydfiler å laste ned, så det virker offline også.
+Høyttaler-knappen nede til høyre skrur lyden av og på, og valget huskes i
+`localStorage` (`ukeoppgaver.lyd.v1`).
 
 - Alt ligger i `index.html`: ingen rammeverk, ingen bygg-steg.
 - Hvert familiemedlem logger inn med navn + 4-sifret PIN, og avhukinger

@@ -190,6 +190,12 @@
   .streak-card.perfect .sd.free svg.star{
     fill:var(--streak-2); stroke:var(--streak-2); animation:starPop .5s cubic-bezier(.2,.9,.3,1.6);
   }
+  /* Har siste dag en oppgave, ligger stjerna oppå den gylne stripa og må
+     være mørk for å synes — samme blekk som avhukingene. */
+  .sd.reward svg.star{
+    width:22px; height:22px; fill:#3a2500; stroke:#3a2500; stroke-width:2; stroke-linejoin:round;
+    animation:starPop .5s cubic-bezier(.2,.9,.3,1.6);
+  }
   @keyframes starPop{0%{transform:scale(.4) rotate(-25deg)}60%{transform:scale(1.25) rotate(6deg)}100%{transform:scale(1)}}
 
   .streak-msg{
@@ -288,11 +294,12 @@
     background:radial-gradient(circle, color-mix(in srgb, var(--streak-2) 60%, transparent), transparent 68%);
     animation:halo 2.2s ease-in-out infinite;
   }
+  /* Strålene ligger i en stram ring rundt flammen. Ytterkant 63px < boksens
+     radius på 66px, så de kan aldri lande oppå teksten under. */
   .rays{position:absolute; inset:0; z-index:0; animation:spin 14s linear infinite}
   .rays i{
-    position:absolute; left:50%; top:50%; width:4px; height:52px; margin-left:-2px; border-radius:2px;
-    background:linear-gradient(180deg, color-mix(in srgb, var(--streak-2) 75%, transparent), transparent);
-    transform-origin:1px 66px;
+    position:absolute; left:50%; top:50%; width:3px; margin:-8px 0 0 -1.5px; border-radius:2px;
+    background:linear-gradient(180deg, transparent, color-mix(in srgb, var(--streak-2) 85%, transparent));
   }
   @keyframes spin{to{transform:rotate(360deg)}}
 
@@ -580,7 +587,10 @@
 
   <footer>
     <span id="resetInfo"></span>
-    <button class="reset" id="resetBtn">Nullstille uka</button>
+    <span style="display:flex; gap:8px; flex:0 0 auto">
+      <button type="button" class="reset" id="soundBtn" style="padding:7px 10px">🔊</button>
+      <button type="button" class="reset" id="resetBtn">Nullstille uka</button>
+    </span>
   </footer>
 </main>
 
@@ -810,6 +820,61 @@ const db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
   });
 
   function buzz(ms){ if(navigator.vibrate) navigator.vibrate(ms); }
+
+  // ---- Lyd: korte toner laget i Web Audio. Ingen lydfiler å laste ned,
+  //      så det virker også offline. Kan slås av med høyttaler-knappen.
+  const SOUND_KEY = "ukeoppgaver.lyd.v1";
+  let soundOn = true;
+  try{ soundOn = localStorage.getItem(SOUND_KEY) !== "av"; }catch(e){}
+  let audioCtx = null;
+
+  function tone(freq, at, dur, type, peak){
+    const osc  = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.type = type || "triangle";
+    osc.frequency.setValueAtTime(freq, at);
+    gain.gain.setValueAtTime(0.0001, at);
+    gain.gain.exponentialRampToValueAtTime(peak || 0.16, at + 0.012);
+    gain.gain.exponentialRampToValueAtTime(0.0001, at + dur);
+    osc.connect(gain).connect(audioCtx.destination);
+    osc.start(at);
+    osc.stop(at + dur + 0.03);
+  }
+
+  function playSound(kind){
+    if(!soundOn) return;
+    try{
+      const Ctx = window.AudioContext || window.webkitAudioContext;
+      if(!Ctx) return;
+      if(!audioCtx) audioCtx = new Ctx();
+      if(audioCtx.state === "suspended") audioCtx.resume();   // iOS krever et trykk først
+      const t = audioCtx.currentTime + 0.01;
+      if(kind === "check"){                 // kvikk stigende "pling"
+        tone(659.25, t, 0.10);              // E5
+        tone(987.77, t + 0.065, 0.17);      // B5
+      } else if(kind === "uncheck"){        // dempet, synkende
+        tone(392.00, t, 0.09, "sine", 0.10);
+        tone(293.66, t + 0.05, 0.12, "sine", 0.09);
+      } else if(kind === "perfect"){        // liten fanfare for perfekt uke
+        [523.25, 659.25, 783.99, 1046.50].forEach((f,i) => tone(f, t + i * 0.11, 0.32, "triangle", 0.19));
+        tone(1567.98, t + 0.46, 0.55, "sine", 0.11);
+      }
+    }catch(e){ /* lyd er pynt, aldri verdt en krasj */ }
+  }
+
+  const soundBtn = document.getElementById("soundBtn");
+  function paintSoundBtn(){
+    soundBtn.textContent = soundOn ? "🔊" : "🔇";
+    soundBtn.setAttribute("aria-label", soundOn ? "Skru av lyd" : "Skru på lyd");
+    soundBtn.setAttribute("aria-pressed", String(soundOn));
+  }
+  soundBtn.addEventListener("click", () => {
+    soundOn = !soundOn;
+    try{ localStorage.setItem(SOUND_KEY, soundOn ? "på" : "av"); }catch(e){}
+    paintSoundBtn();
+    if(soundOn) playSound("check");   // liten forhåndsvisning
+  });
+  paintSoundBtn();
 
   function logIn(m){
     try{ localStorage.setItem(MEMBER_KEY, JSON.stringify({ id:m.id, name:m.name, isAdmin:!!m.isAdmin })); }catch(e){}
@@ -1086,8 +1151,12 @@ const db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
         ? DAYS_LONG[i] + ", fri"
         : DAYS_LONG[i] + ", " + done + " av " + list.length + " gjort");
       b.setAttribute("aria-pressed", String(i === selected));
+      // Siste dag i uka er belønningsplassen: der lyser stjerna når uka er
+      // perfekt, uansett om dagen har oppgaver eller er fri.
+      const reward = (i === 6 && s.allDone);
+      if(reward) b.classList.add("reward");
       b.innerHTML = '<span class="sd-mark">' +
-        (dayFree(i) ? STAR_SVG : dayDone(i) ? CHECK_SVG : dateFor(i).getDate()) +
+        (reward || dayFree(i) ? STAR_SVG : dayDone(i) ? CHECK_SVG : dateFor(i).getDate()) +
         '</span>';
       b.addEventListener("click", () => { selected = i; buzz(8); render(); });
       rowEl.appendChild(b);
@@ -1096,6 +1165,7 @@ const db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
     // Sammenhengende stripe: nabodager som er hele smelter til én stolpe,
     // slik Duolingo gjør det når dagene "kollapser" til en perfekt uke.
     const sig = [0,1,2,3,4,5,6].map(i => dayDone(i) ? "1" : "0").join("");
+    const firstRender = lastDaySig === null;
     const grew = sig !== lastDaySig;          // ikke animer når man bare bytter dag
     lastDaySig = sig;
 
@@ -1123,7 +1193,9 @@ const db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
     const wasPerfect = cardEl.classList.contains("perfect");
     cardEl.classList.toggle("perfect", s.allDone);
-    if(s.allDone && !wasPerfect) fireConfetti(cardEl);
+    // Feires bare når uka faktisk blir perfekt her og nå — ikke hver gang
+    // appen åpnes på en uke som alt er ferdig (da tar feiringsarket jobben).
+    if(s.allDone && !wasPerfect && !firstRender){ fireConfetti(cardEl); playSound("perfect"); }
 
     const igjen = s.total - s.doneCount;
     document.getElementById("streakMsg").innerHTML =
@@ -1187,6 +1259,7 @@ const db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
         else state.done[t.id] = true;
         dismissed = false;
         buzz(state.done[t.id] ? [12,40,18] : 8);
+        playSound(state.done[t.id] ? "check" : "uncheck");
         save(); render();
       };
       li.addEventListener("click", toggle);
@@ -1237,7 +1310,8 @@ const db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
       if(!rays.childElementCount){
         for(let i=0;i<12;i++){
           const r = document.createElement("i");
-          r.style.transform = "rotate(" + (i * 30) + "deg) translate(-50%,-100%)";
+          r.style.height = (i % 2 ? 10 : 15) + "px";      // vekslende lengde
+          r.style.transform = "rotate(" + (i * 30) + "deg) translateY(-53px)";
           rays.appendChild(r);
         }
       }
