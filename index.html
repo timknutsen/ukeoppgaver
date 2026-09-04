@@ -502,25 +502,13 @@
   </div>
 </nav>
 
-<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script>
-// ---- Firebase-oppsett ----
-// Lag et gratis Firebase-prosjekt på https://console.firebase.google.com,
-// slå på "Anonymous" under Authentication > Sign-in method, slå på Firestore,
-// og lim inn config-objektet fra Project settings > General > Your apps her.
-const firebaseConfig = {
-  apiKey: "AIzaSyBaEFCjqDXPwUZqEDizPk4ntJp06KGQVoQ",
-  authDomain: "aksel-ukeoppgaver.firebaseapp.com",
-  projectId: "aksel-ukeoppgaver",
-  storageBucket: "aksel-ukeoppgaver.firebasestorage.app",
-  messagingSenderId: "721287815555",
-  appId: "1:721287815555:web:38e3dcec591dbacde2d6b6"
-};
-firebase.initializeApp(firebaseConfig);
-const auth = firebase.auth();
-const db = firebase.firestore();
+// ---- Supabase-oppsett ----
+// Prosjekt-URL og publishable/anon-nøkkel fra Supabase > Project settings > API.
+const SUPABASE_URL = "https://xishtaqioetncnczznuv.supabase.co";
+const SUPABASE_KEY = "sb_publishable_uH-lmVlIlxiW-GQeXEH-3A_gIUEV_vW";
+const db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 </script>
 
 <script>
@@ -639,25 +627,20 @@ const db = firebase.firestore();
 
   renderPinPad();
 
-  auth.signInAnonymously().catch(err => {
-    memberGrid.innerHTML = '<div class="empty" style="grid-column:1/-1"><span class="big">⚠️</span>Fikk ikke kontakt med serveren.<br>' + (err && err.message ? err.message : "") + '</div>';
-  });
+  db.from("members").select("*").order("member_order").then(({ data, error }) => {
+    if(error){
+      memberGrid.innerHTML = '<div class="empty" style="grid-column:1/-1"><span class="big">⚠️</span>Klarte ikke å hente familiemedlemmer.<br>' + error.message + '</div>';
+      return;
+    }
+    members = (data || []).map(r => ({ id:r.id, name:r.name, pin:r.pin, isAdmin:!!r.is_admin, order:r.member_order }));
+    renderMemberGrid();
 
-  auth.onAuthStateChanged(user => {
-    if(!user) return;
-    db.collection("members").orderBy("order").get().then(snap => {
-      members = snap.docs.map(d => Object.assign({ id:d.id }, d.data()));
-      renderMemberGrid();
-
-      let saved = null;
-      try{ saved = JSON.parse(localStorage.getItem(MEMBER_KEY) || "null"); }catch(e){}
-      if(saved){
-        const m = members.find(x => x.id === saved.id);
-        if(m) return enterApp(m);
-      }
-    }).catch(err => {
-      memberGrid.innerHTML = '<div class="empty" style="grid-column:1/-1"><span class="big">⚠️</span>Klarte ikke å hente familiemedlemmer.<br>' + (err && err.message ? err.message : "") + '</div>';
-    });
+    let saved = null;
+    try{ saved = JSON.parse(localStorage.getItem(MEMBER_KEY) || "null"); }catch(e){}
+    if(saved){
+      const m = members.find(x => x.id === saved.id);
+      if(m) enterApp(m);
+    }
   });
 
   // Offline-støtte: appen starter uten nett etter første besøk (kjøres uavhengig av innlogging)
@@ -716,7 +699,7 @@ const db = firebase.firestore();
   }
   function saveEarnings(){
     try{ localStorage.setItem(EARN_KEY, JSON.stringify(earnings)); }catch(e){}
-    db.collection("earnings").doc(member.id).set(earnings).catch(() => {});
+    db.from("earnings").upsert({ member_id:member.id, ukesats:earnings.ukesats, uker:earnings.uker }).then(() => {});
   }
   function kr(n){ return Math.round(n).toLocaleString("nb-NO").replace(/,/g," ") + " kr"; }
 
@@ -724,14 +707,12 @@ const db = firebase.firestore();
 
   // Hent skyversjonen og slå den sammen med det som er lagret på denne enheten:
   // fullførte uker er en union (aldri mist en uke som er registrert et annet sted).
-  db.collection("earnings").doc(member.id).get().then(snap => {
-    if(!snap.exists) return;
-    const cloud = snap.data();
+  db.from("earnings").select("*").eq("member_id", member.id).maybeSingle().then(({ data:cloud }) => {
     if(!cloud || !Array.isArray(cloud.uker)) return;
     let changed = false;
     cloud.uker.forEach(w => { if(earnings.uker.indexOf(w) === -1){ earnings.uker.push(w); changed = true; } });
     if(changed){ saveEarnings(); render(); }
-  }).catch(() => {});
+  });
 
   // ---- Uke-hjelpere (mandag som ukestart) ----
   function mondayOf(d){
@@ -781,19 +762,17 @@ const db = firebase.firestore();
 
   function save(){
     try{ localStorage.setItem(STORE_KEY, JSON.stringify(state)); }catch(e){}
-    db.collection("state").doc(member.id).set(state).catch(() => {});
+    db.from("state").upsert({ member_id:member.id, week:state.week, done:state.done }).then(() => {});
   }
   save(); // skriver over forrige ukes data med en gang uka har skiftet
 
   // Hent skyversjonen av denne ukas avhukinger (samme medlem, annen enhet) og slå sammen
-  db.collection("state").doc(member.id).get().then(snap => {
-    if(!snap.exists) return;
-    const cloud = snap.data();
+  db.from("state").select("*").eq("member_id", member.id).maybeSingle().then(({ data:cloud }) => {
     if(!cloud || cloud.week !== state.week || !cloud.done) return;
     let changed = false;
     Object.keys(cloud.done).forEach(id => { if(cloud.done[id] && !state.done[id]){ state.done[id] = true; changed = true; } });
     if(changed){ save(); render(); }
-  }).catch(() => {});
+  });
 
   let selected  = todayIdx;
   let dismissed = false; // "Uka er fullført"-arket lukket for denne fullføringen
@@ -1231,7 +1210,7 @@ const db = firebase.firestore();
     listEl.innerHTML = '<div class="muted small">Henter…</div>';
 
     Promise.all(members.map(m =>
-      db.collection("state").doc(m.id).get().then(snap => ({ member:m, data:snap.exists ? snap.data() : null }))
+      db.from("state").select("*").eq("member_id", m.id).maybeSingle().then(({ data }) => ({ member:m, data:data || null }))
     )).then(results => {
       listEl.innerHTML = "";
       results.forEach(({ member:m, data }) => {
@@ -1250,13 +1229,12 @@ const db = firebase.firestore();
             '<span class="check" style="' + (isDoneNow ? "background:var(--done);border-color:var(--done)" : "") + '"><svg viewBox="0 0 24 24" style="opacity:' + (isDoneNow ? "1" : "0") + '"><polyline points="4,12.5 9.5,18 20,6.5"/></svg></span>' +
             '<span class="label">' + DAYS_SHORT[t.day] + ' · ' + t.emoji + ' ' + t.label + '</span>';
           row.addEventListener("click", () => {
-            const ref = db.collection("state").doc(m.id);
             const next = Object.assign({}, done);
             if(next[t.id]) delete next[t.id]; else next[t.id] = true;
-            ref.set({ week:thisWeek, done:next }).then(() => {
+            db.from("state").upsert({ member_id:m.id, week:thisWeek, done:next }).then(() => {
               if(m.id === member.id){ state.done = next; save(); render(); }
               renderAdmin();
-            }).catch(() => {});
+            });
           });
           card.appendChild(row);
         });
