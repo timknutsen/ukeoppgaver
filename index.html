@@ -2044,6 +2044,11 @@ const db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
       const krav    = claimRes.data || [];
       const venter  = krav.filter(k => k.status === "venter");
 
+      // Maks én innmelding per oppdrag per dag. Avviste teller ikke — blir et
+      // krav avvist, kan samme oppdrag meldes inn på nytt samme dag.
+      const idagStr = new Date().toDateString();
+      const idag = krav.filter(k => k.status !== "avvist" && new Date(k.created_at).toDateString() === idagStr);
+
       // Venter på godkjenning
       pendingEl.innerHTML = venter.length ? '<div class="card" style="margin-top:16px">' +
         '<div class="card-title" style="margin-bottom:10px">Venter på godkjenning</div>' +
@@ -2061,15 +2066,18 @@ const db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
         listEl.innerHTML = '<div class="muted small">Ingen ekstraoppgaver akkurat nå.</div>';
       }
       bonuser.forEach(b => {
-        const alleredeMeldt = venter.some(k => k.bonus_id === b.id);
+        const kravIdag = idag.find(k => k.bonus_id === b.id);
         const btn = document.createElement("button");
         btn.type = "button";
         btn.className = "bonus-row";
-        btn.disabled = alleredeMeldt;
+        btn.disabled = !!kravIdag;
+        const sub = !kravIdag ? "Trykk når du har gjort den"
+          : kravIdag.status === "venter" ? "Venter på godkjenning"
+          : "Gjort i dag — kom tilbake i morgen";
         btn.innerHTML =
           '<span class="emoji">' + esc(b.emoji) + '</span>' +
           '<span class="b-txt"><span class="b-label">' + esc(b.label) + '</span>' +
-          '<span class="b-sub">' + (alleredeMeldt ? "Venter på godkjenning" : "Trykk når du har gjort den") + '</span></span>' +
+          '<span class="b-sub">' + sub + '</span></span>' +
           '<span class="bonus-amt">+' + kr(b.amount) + '</span>';
         btn.addEventListener("click", () => {
           if(!confirm('Melde inn "' + b.label + '" for ' + kr(b.amount) + '?')) return;

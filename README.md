@@ -89,6 +89,10 @@ Da havner det til godkjenning: admin får et varselmerke på Admin-fanen og et
 kort øverst med «Godkjenn» / «Avvis». Først ved godkjenning føres beløpet inn
 i `ledger`, så det teller som til gode og dukker opp i barnets «Opptjent».
 
+Hvert oppdrag kan meldes inn maks én gang per dag — knappen sperres mens et
+krav venter eller er godkjent samme dag. Blir kravet avvist, telles det
+ikke, og oppdraget kan meldes inn på nytt med en gang.
+
 Tabellene er `bonus_tasks` (menyen) og `bonus_claims` (innmeldte krav, med
 status `venter`/`godkjent`/`avvist`). Kravet lagrer sin egen kopi av navn og
 beløp, slik at historikken står seg selv om oppdraget senere endres eller
