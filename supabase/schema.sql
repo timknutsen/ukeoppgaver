@@ -56,3 +56,44 @@ on conflict (id) do nothing;
 
 insert into settings (id, ukesats) values ('global', 250)
 on conflict (id) do nothing;
+
+-- ---- Ekstraoppgaver ----
+-- Menyen admin tilbyr
+create table if not exists bonus_tasks (
+  id bigint generated always as identity primary key,
+  emoji text not null default '⭐',
+  label text not null,
+  amount int not null,
+  active boolean not null default true,
+  sort_order int not null default 0
+);
+
+-- Innmeldte krav. Label og beløp kopieres inn, slik at historikken overlever
+-- at oppgaven senere endres eller slettes.
+create table if not exists bonus_claims (
+  id bigint generated always as identity primary key,
+  bonus_id bigint references bonus_tasks(id) on delete set null,
+  member_id text not null references members(id) on delete cascade,
+  label text not null,
+  emoji text not null default '⭐',
+  amount int not null,
+  status text not null default 'venter',   -- venter | godkjent | avvist
+  created_at timestamptz not null default now(),
+  decided_at timestamptz
+);
+
+create index if not exists bonus_claims_member_idx on bonus_claims (member_id, created_at desc);
+create index if not exists bonus_claims_status_idx on bonus_claims (status);
+
+alter table bonus_tasks enable row level security;
+alter table bonus_claims enable row level security;
+
+create policy "bonus_tasks are readable"  on bonus_tasks for select using (true);
+create policy "bonus_tasks are writable"  on bonus_tasks for insert with check (true);
+create policy "bonus_tasks are updatable" on bonus_tasks for update using (true);
+create policy "bonus_tasks are deletable" on bonus_tasks for delete using (true);
+
+create policy "bonus_claims are readable"  on bonus_claims for select using (true);
+create policy "bonus_claims are writable"  on bonus_claims for insert with check (true);
+create policy "bonus_claims are updatable" on bonus_claims for update using (true);
+create policy "bonus_claims are deletable" on bonus_claims for delete using (true);

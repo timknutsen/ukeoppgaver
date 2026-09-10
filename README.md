@@ -78,6 +78,23 @@ ikke Uke og Opptjent. Admin-fanen har, per barn:
 
 Regnestykket: `til gode = perfekte uker × ukessats + bonuser − utbetalt`.
 
+## Ekstraoppgaver
+
+Utenom den faste ukeplanen finnes en meny med ekstraoppdrag som gir penger
+i tillegg — «Vaske bilen – 100 kr», «Måke snø – 50 kr». Admin styrer menyen
+i «Ekstraoppgaver»-boksen i Admin-fanen.
+
+Barna ser menyen i «Ekstra»-fanen og trykker når de har gjort et oppdrag.
+Da havner det til godkjenning: admin får et varselmerke på Admin-fanen og et
+kort øverst med «Godkjenn» / «Avvis». Først ved godkjenning føres beløpet inn
+i `ledger`, så det teller som til gode og dukker opp i barnets «Opptjent».
+
+Tabellene er `bonus_tasks` (menyen) og `bonus_claims` (innmeldte krav, med
+status `venter`/`godkjent`/`avvist`). Kravet lagrer sin egen kopi av navn og
+beløp, slik at historikken står seg selv om oppdraget senere endres eller
+slettes. Kurven på «Opptjent» viser bare ukelønna — er det tjent penger på
+ekstraoppgaver i tillegg, står det som en egen linje under kurven.
+
 **Merk om sikkerhet:** PIN-koden er en enkel gate mot søsken som haker av
 hverandres oppgaver — ikke ekte tilgangskontroll. Alle med den offentlige
 publishable-nøkkelen kan i prinsippet lese og skrive alles data i `state`
