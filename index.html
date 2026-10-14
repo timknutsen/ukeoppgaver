@@ -563,6 +563,7 @@
   .tr-dot.planlagt{border-color:var(--line); color:var(--txt)}
   .tr-dot.idag, .tr-dot.pagar{border-color:var(--streak); color:var(--txt)}
   .tr-dot.hvile{background:transparent}
+  .tr-dot.flyttet{background:transparent; border:2px dashed color-mix(in srgb, var(--streak) 60%, transparent); color:var(--streak)}
   .tr-streak{
     flex:0 0 auto; border-radius:999px; padding:5px 10px; font:800 .78rem system-ui;
     background:color-mix(in srgb, var(--streak) 16%, transparent); color:var(--streak);
@@ -2077,7 +2078,8 @@ const db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
   // ---- Trening: oversikt fra treningsappen (training_plans og training_days) ----
   const TR_SHORT = ["Søn","Man","Tir","Ons","Tor","Fre","Lør"];
   const TR_TEXT  = { fullfort:"fullført", delvis:"delvis", ikke:"ikke trent", hoppet:"hoppet over",
-                     planlagt:"planlagt", pagar:"påbegynt", idag:"ikke begynt", hvile:"hviledag" };
+                     planlagt:"planlagt", pagar:"påbegynt", idag:"ikke begynt", hvile:"hviledag",
+                     flyttet:"flyttet til en annen dag" };
   function dayKeyOf(d){
     const p = n => String(n).padStart(2,"0");
     return d.getFullYear() + "-" + p(d.getMonth()+1) + "-" + p(d.getDate());
@@ -2085,8 +2087,29 @@ const db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
   // Samme inndeling som i treningsappen. Dager som aldri er rørt der, ligger
   // ikke i skyen; da avgjør planen om dagen var en treningsdag.
-  function trClass(key, row, plan, todayKey){
+  // Øvelser som flyttes, husker dagen de kom fra (origin). En dag der alt som
+  // ble flyttet er gjort, eller fortsatt venter på i dag eller senere, er
+  // "flyttet": den bryter verken rekka eller uka. Samme regel som i appen.
+  function trOrigins(rows, todayKey){
+    const idx = {};
+    rows.forEach(r => {
+      const items = r.data && Array.isArray(r.data.items) ? r.data.items : [];
+      items.forEach(i => {
+        if(!i.origin || i.origin >= r.day) return;
+        const o = idx[i.origin] || (idx[i.origin] = { n:0, undone:0, waiting:false });
+        o.n++;
+        if(!i.done){ o.undone++; if(r.day >= todayKey) o.waiting = true; }
+      });
+    });
+    return idx;
+  }
+
+  function trClass(key, row, plan, todayKey, origins){
     const d = row && row.data;
+    if(d && d.skipped && origins){
+      const o = origins[key];
+      if(o && o.n && (!o.undone || o.waiting)) return "flyttet";
+    }
     if(d){
       const items = Array.isArray(d.items) ? d.items : [];
       if(!items.length) return d.skipped ? "hoppet" : "hvile";
@@ -2107,23 +2130,24 @@ const db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
     rows.forEach(r => { byDay[r.day] = r; });
     const today = new Date(); today.setHours(0,0,0,0);
     const tKey  = dayKeyOf(today);
-    const cls   = d => { const k = dayKeyOf(d); return trClass(k, byDay[k], plan, tKey); };
+    const origins = trOrigins(rows, tKey);
+    const cls   = d => { const k = dayKeyOf(d); return trClass(k, byDay[k], plan, tKey, origins); };
 
     // Hviledager bryter ikke rekka, og dagens økt teller først når den er gjort.
     let streak = 0;
     for(let i = cls(today) === "fullfort" ? 0 : 1; i < 400; i++){
       const c = cls(addDays(today, -i));
-      if(c === "hvile") continue;
+      if(c === "hvile" || c === "flyttet") continue;
       if(c === "fullfort") streak++; else break;
     }
     const mon  = mondayOf(today);
     const week = [0,1,2,3,4,5,6].map(j => { const d = addDays(mon, j); return { d, key:dayKeyOf(d), c:cls(d) }; });
-    const done = rows.filter(r => r.day <= tKey && trClass(r.day, r, plan, tKey) === "fullfort")
+    const done = rows.filter(r => r.day <= tKey && trClass(r.day, r, plan, tKey, origins) === "fullfort")
                      .sort((a,b) => a.day < b.day ? 1 : -1);
     return {
       streak, week, tKey,
       planned:  week.filter(x => x.c !== "hvile").length,
-      complete: week.filter(x => x.c === "fullfort").length,
+      complete: week.filter(x => x.c === "fullfort" || x.c === "flyttet" && !(origins[x.key] && origins[x.key].undone)).length,
       total: done.length,
       last: done[0] || null
     };
@@ -2160,7 +2184,7 @@ const db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
               '<div class="tr-week">' + st.week.map(x =>
                 '<div><span class="' + (x.key === st.tKey ? "today" : "") + '">' + TR_SHORT[x.d.getDay()] + '</span>' +
                 '<i class="tr-dot ' + x.c + '" title="' + TR_TEXT[x.c] + '">' +
-                  (x.c === "fullfort" ? "✓" : x.c === "hvile" ? "" : x.d.getDate()) +
+                  (x.c === "fullfort" ? "✓" : x.c === "flyttet" ? "↪" : x.c === "hvile" ? "" : x.d.getDate()) +
                 '</i></div>').join("") +
               '</div>' +
               '<div class="admin-mini-row">' +
