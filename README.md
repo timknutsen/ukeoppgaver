@@ -106,6 +106,15 @@ og `earnings` direkte mot Supabase. Helt greit for en husoppgave-app for
 familien, men ikke bruk dette mønsteret for noe som faktisk trenger å
 være privat.
 
+## Trening
+
+Admin-fanen har et «🏋️ Trening»-kort med data fra treningsappen
+(`training_plans` og `training_days`), per barn som har brukt den: rekka
+(økter på rad), ukestripe for denne uka, fullførte økter denne uka av
+planlagte, totalt antall økter og når det sist ble trent. Dager som aldri
+er rørt i treningsappen ligger ikke i skyen; da avgjør planen om dagen var en
+treningsdag.
+
 ## Meldinger fra treningsappen
 
 Treningsappen har en «💬 Si fra»-knapp der man kan melde inn feil eller
