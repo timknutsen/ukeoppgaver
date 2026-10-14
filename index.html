@@ -549,6 +549,26 @@
   .mini-btn.ja{background:var(--done); border-color:var(--done); color:#04121f}
   .mini-btn:active{transform:scale(.95)}
 
+  /* ---------- Trening (fra treningsappen) ---------- */
+  .tr-week{display:grid; grid-template-columns:repeat(7,1fr); gap:4px; margin-top:12px; text-align:center}
+  .tr-week span{display:block; font-size:.64rem; font-weight:700; color:var(--muted); margin-bottom:5px}
+  .tr-week span.today{color:var(--streak)}
+  .tr-dot{
+    width:26px; height:26px; border-radius:50%; margin:0 auto; display:grid; place-items:center;
+    background:var(--card); border:2px solid transparent; font:800 .72rem system-ui; color:var(--muted);
+  }
+  .tr-dot.fullfort{background:linear-gradient(180deg,var(--streak-2),var(--streak)); color:#3a2500}
+  .tr-dot.delvis{background:color-mix(in srgb, var(--streak) 30%, var(--card)); color:var(--txt)}
+  .tr-dot.ikke, .tr-dot.hoppet{background:color-mix(in srgb, #f87171 18%, var(--card)); color:#f87171}
+  .tr-dot.planlagt{border-color:var(--line); color:var(--txt)}
+  .tr-dot.idag, .tr-dot.pagar{border-color:var(--streak); color:var(--txt)}
+  .tr-dot.hvile{background:transparent}
+  .tr-streak{
+    flex:0 0 auto; border-radius:999px; padding:5px 10px; font:800 .78rem system-ui;
+    background:color-mix(in srgb, var(--streak) 16%, transparent); color:var(--streak);
+    border:1px solid color-mix(in srgb, var(--streak) 38%, transparent);
+  }
+
   /* ---------- Meldinger fra treningsappen ---------- */
   .fb-card{
     background:var(--card); border:1px solid color-mix(in srgb, var(--accent) 45%, transparent);
@@ -753,6 +773,7 @@
   </div>
 
   <div id="adminList"></div>
+  <div id="adminTraining"></div>
 
   <div class="card" style="margin-top:20px">
     <div class="card-title" style="margin-bottom:10px">Oppgaveplan</div>
@@ -2053,6 +2074,106 @@ const db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
     }
   });
 
+  // ---- Trening: oversikt fra treningsappen (training_plans og training_days) ----
+  const TR_SHORT = ["Søn","Man","Tir","Ons","Tor","Fre","Lør"];
+  const TR_TEXT  = { fullfort:"fullført", delvis:"delvis", ikke:"ikke trent", hoppet:"hoppet over",
+                     planlagt:"planlagt", pagar:"påbegynt", idag:"ikke begynt", hvile:"hviledag" };
+  function dayKeyOf(d){
+    const p = n => String(n).padStart(2,"0");
+    return d.getFullYear() + "-" + p(d.getMonth()+1) + "-" + p(d.getDate());
+  }
+
+  // Samme inndeling som i treningsappen. Dager som aldri er rørt der, ligger
+  // ikke i skyen; da avgjør planen om dagen var en treningsdag.
+  function trClass(key, row, plan, todayKey){
+    const d = row && row.data;
+    if(d){
+      const items = Array.isArray(d.items) ? d.items : [];
+      if(!items.length) return d.skipped ? "hoppet" : "hvile";
+      if(key > todayKey) return "planlagt";
+      const done = items.filter(i => i.done).length;
+      if(d.skipped) return "delvis";
+      if(done === items.length) return "fullfort";
+      if(key === todayKey) return done ? "pagar" : "idag";
+      return done ? "delvis" : "ikke";
+    }
+    const spec = plan && plan.days && plan.days[keyToDate(key).getDay()];
+    if(!spec || !Array.isArray(spec.exercises) || !spec.exercises.length) return "hvile";
+    return key > todayKey ? "planlagt" : key === todayKey ? "idag" : "ikke";
+  }
+
+  function trStats(plan, rows){
+    const byDay = {};
+    rows.forEach(r => { byDay[r.day] = r; });
+    const today = new Date(); today.setHours(0,0,0,0);
+    const tKey  = dayKeyOf(today);
+    const cls   = d => { const k = dayKeyOf(d); return trClass(k, byDay[k], plan, tKey); };
+
+    // Hviledager bryter ikke rekka, og dagens økt teller først når den er gjort.
+    let streak = 0;
+    for(let i = cls(today) === "fullfort" ? 0 : 1; i < 400; i++){
+      const c = cls(addDays(today, -i));
+      if(c === "hvile") continue;
+      if(c === "fullfort") streak++; else break;
+    }
+    const mon  = mondayOf(today);
+    const week = [0,1,2,3,4,5,6].map(j => { const d = addDays(mon, j); return { d, key:dayKeyOf(d), c:cls(d) }; });
+    const done = rows.filter(r => r.day <= tKey && trClass(r.day, r, plan, tKey) === "fullfort")
+                     .sort((a,b) => a.day < b.day ? 1 : -1);
+    return {
+      streak, week, tKey,
+      planned:  week.filter(x => x.c !== "hvile").length,
+      complete: week.filter(x => x.c === "fullfort").length,
+      total: done.length,
+      last: done[0] || null
+    };
+  }
+
+  function renderTraining(){
+    if(!member.isAdmin) return;
+    const el = document.getElementById("adminTraining");
+
+    Promise.all([
+      db.from("training_plans").select("member_id,plan"),
+      db.from("training_days").select("member_id,day,data")
+    ]).then(([planRes, dayRes]) => {
+      if(planRes.error || dayRes.error){ el.innerHTML = ""; return; }
+      const plans = {}, daysBy = {};
+      (planRes.data || []).forEach(r => { plans[r.member_id] = r.plan; });
+      (dayRes.data  || []).forEach(r => { (daysBy[r.member_id] = daysBy[r.member_id] || []).push(r); });
+
+      const kids = members.filter(m => !m.isAdmin && (plans[m.id] || daysBy[m.id]));
+      if(!kids.length){ el.innerHTML = ""; return; }
+
+      el.innerHTML =
+        '<div class="card" style="margin-top:20px">' +
+          '<div class="card-title">🏋️ Trening</div>' +
+          '<div class="muted small">Fra treningsappen</div>' +
+          kids.map(m => {
+            const st = trStats(plans[m.id], daysBy[m.id] || []);
+            const sist = st.last ? dm(keyToDate(st.last.day)) : "–";
+            return '<div class="admin-member" style="margin:12px 0 0">' +
+              '<div class="admin-head">' +
+                '<h3>' + esc(m.name) + '</h3>' +
+                '<span class="tr-streak">🔥 ' + st.streak + ' på rad</span>' +
+              '</div>' +
+              '<div class="tr-week">' + st.week.map(x =>
+                '<div><span class="' + (x.key === st.tKey ? "today" : "") + '">' + TR_SHORT[x.d.getDay()] + '</span>' +
+                '<i class="tr-dot ' + x.c + '" title="' + TR_TEXT[x.c] + '">' +
+                  (x.c === "fullfort" ? "✓" : x.c === "hvile" ? "" : x.d.getDate()) +
+                '</i></div>').join("") +
+              '</div>' +
+              '<div class="admin-mini-row">' +
+                '<div class="admin-mini"><div class="admin-mini-label">Denne uka</div><div class="admin-mini-value">' + st.complete + '/' + st.planned + '</div></div>' +
+                '<div class="admin-mini"><div class="admin-mini-label">Totalt</div><div class="admin-mini-value">' + st.total + '</div></div>' +
+                '<div class="admin-mini"><div class="admin-mini-label">Sist trent</div><div class="admin-mini-value">' + sist + '</div></div>' +
+              '</div>' +
+            '</div>';
+          }).join("") +
+        '</div>';
+    }).catch(() => { el.innerHTML = ""; });
+  }
+
   // ---- Admin: rediger menyen av ekstraoppgaver ----
   function renderBonusEditor(){
     if(!member.isAdmin) return;
@@ -2211,7 +2332,7 @@ const db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
       renderWeekTable(s);
       animateHero(s.totalEarned);
     }
-    if(v === "admin"){ renderAdmin(); renderAdminConfig(); renderApprovals(); renderFeedback(); renderBonusEditor(); }
+    if(v === "admin"){ renderAdmin(); renderAdminConfig(); renderApprovals(); renderFeedback(); renderTraining(); renderBonusEditor(); }
     if(v === "ekstra") renderEkstra();
   }
 
