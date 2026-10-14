@@ -53,7 +53,7 @@ editor → members → Insert row). Én rad per person:
 - `member_order` (int) — rekkefølge på innloggingsskjermen
 
 Tabellene er allerede opprettet i prosjektet: `members`, `state`, `earnings`,
-`tasks`, `settings` og `ledger`. `supabase/schema.sql` er kopien av
+`tasks`, `settings`, `ledger` og `feedback`. `supabase/schema.sql` er kopien av
 oppsettet, hvis alt må settes opp på nytt et annet sted.
 
 Etter dette kan hvert familiemedlem logge inn med navn + PIN. Den gamle
@@ -105,6 +105,13 @@ publishable-nøkkelen kan i prinsippet lese og skrive alles data i `state`
 og `earnings` direkte mot Supabase. Helt greit for en husoppgave-app for
 familien, men ikke bruk dette mønsteret for noe som faktisk trenger å
 være privat.
+
+## Meldinger fra treningsappen
+
+Treningsappen har en «💬 Si fra»-knapp der man kan melde inn feil eller
+forslag. Meldingene lagres i `feedback`-tabellen og vises øverst i
+Admin-fanen, under kravene som venter. Nye meldinger teller med i merket på
+Admin-fanen. «Ferdig» flytter en melding ned i «Ferdige», der den kan slettes.
 
 ## Oppgaveplan
 

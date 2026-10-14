@@ -548,6 +548,20 @@
   }
   .mini-btn.ja{background:var(--done); border-color:var(--done); color:#04121f}
   .mini-btn:active{transform:scale(.95)}
+
+  /* ---------- Meldinger fra treningsappen ---------- */
+  .fb-card{
+    background:var(--card); border:1px solid color-mix(in srgb, var(--accent) 45%, transparent);
+    border-radius:var(--r); padding:14px; margin:16px 0;
+  }
+  .fb-head{font-weight:800; font-size:.95rem; color:var(--accent); margin-bottom:10px}
+  .fb-row{
+    display:flex; align-items:flex-start; gap:10px; padding:10px 0;
+    border-bottom:1px solid color-mix(in srgb, var(--line) 55%, transparent);
+  }
+  .fb-row:last-child{border-bottom:none}
+  .fb-msg{display:block; font-weight:600; font-size:.9rem; white-space:pre-wrap; overflow-wrap:anywhere}
+  .fb-card .admin-ledger{margin-top:6px}
 </style>
 </head>
 <body>
@@ -727,6 +741,7 @@
   <div class="sub">Pengebeholdning, uke og oppgaveplan</div>
 
   <div id="adminApprovals"></div>
+  <div id="adminFeedback"></div>
 
   <div class="card" id="adminSummary" style="margin-top:16px" hidden>
     <div class="row-between">
@@ -1910,16 +1925,24 @@ const db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
     TASKS.forEach(t => tasksEl.appendChild(taskRow(t)));
   }
 
+  // Merket på Admin-fanen teller både krav som venter og nye meldinger
+  let badgeClaims = 0, badgeFeedback = 0;
+  function paintBadge(){
+    const badge = document.getElementById("adminBadge");
+    const n = badgeClaims + badgeFeedback;
+    badge.hidden = n === 0;
+    badge.textContent = n;
+  }
+
   // ---- Ekstraoppgaver: admin godkjenner innmeldte krav ----
   function renderApprovals(){
     if(!member.isAdmin) return;
     const el = document.getElementById("adminApprovals");
-    const badge = document.getElementById("adminBadge");
 
     db.from("bonus_claims").select("*").eq("status", "venter").order("created_at").then(({ data }) => {
       const venter = data || [];
-      badge.hidden = venter.length === 0;
-      badge.textContent = venter.length;
+      badgeClaims = venter.length;
+      paintBadge();
 
       if(!venter.length){ el.innerHTML = ""; return; }
 
@@ -1971,6 +1994,64 @@ const db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
       }).then(() => { renderApprovals(); renderAdmin(); });
     });
   }
+
+  // ---- Meldinger (feil og forslag) sendt fra treningsappen ----
+  const APP_NAVN = { trening: "Treningsappen" };
+
+  function renderFeedback(){
+    if(!member.isAdmin) return;
+    const el = document.getElementById("adminFeedback");
+
+    db.from("feedback").select("*").order("created_at", { ascending:false }).limit(40).then(({ data, error }) => {
+      if(error){ el.innerHTML = ""; return; }
+      const alle   = data || [];
+      const nye    = alle.filter(f => f.status === "ny");
+      const ferdig = alle.filter(f => f.status !== "ny");
+      badgeFeedback = nye.length;
+      paintBadge();
+
+      if(!alle.length){ el.innerHTML = ""; return; }
+
+      const rad = (f, erNy) =>
+        '<div class="fb-row" data-id="' + f.id + '">' +
+          '<span class="emoji" style="font-size:1.3rem">' + (f.kind === "feil" ? "🐛" : "💡") + '</span>' +
+          '<span style="flex:1; min-width:0">' +
+            '<span class="fb-msg">' + esc(f.message) + '</span>' +
+            '<span class="muted small" style="display:block; margin-top:3px">' +
+              (f.kind === "feil" ? "Feil" : "Forslag") + ' · ' + esc(APP_NAVN[f.app] || f.app) + ' · ' +
+              new Date(f.created_at).toLocaleString("nb-NO", { day:"numeric", month:"short", hour:"2-digit", minute:"2-digit" }) +
+            '</span>' +
+          '</span>' +
+          (erNy
+            ? '<button type="button" class="mini-btn ja" data-ferdig="1">Ferdig</button>'
+            : '<button type="button" class="led-del" data-slett="1" title="Slett">✕</button>') +
+        '</div>';
+
+      el.innerHTML =
+        '<div class="fb-card">' +
+          '<div class="fb-head">💬 Meldinger' + (nye.length ? ' (' + nye.length + ' nye)' : '') + '</div>' +
+          (nye.length ? nye.map(f => rad(f, true)).join("")
+                      : '<div class="muted small">Ingen nye meldinger.</div>') +
+          (ferdig.length
+            ? '<details class="admin-ledger"><summary>Ferdige (' + ferdig.length + ')</summary>' +
+                ferdig.map(f => rad(f, false)).join("") + '</details>'
+            : '') +
+        '</div>';
+    }).catch(() => { el.innerHTML = ""; });
+  }
+
+  document.getElementById("adminFeedback").addEventListener("click", e => {
+    const btn = e.target.closest("[data-ferdig], [data-slett]");
+    if(!btn) return;
+    const id = Number(btn.closest(".fb-row").dataset.id);
+    if(btn.hasAttribute("data-ferdig")){
+      db.from("feedback").update({ status:"ferdig", handled_at:new Date().toISOString() }).eq("id", id)
+        .then(() => renderFeedback());
+    } else {
+      if(!confirm("Slette denne meldingen?")) return;
+      db.from("feedback").delete().eq("id", id).then(() => renderFeedback());
+    }
+  });
 
   // ---- Admin: rediger menyen av ekstraoppgaver ----
   function renderBonusEditor(){
@@ -2130,7 +2211,7 @@ const db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
       renderWeekTable(s);
       animateHero(s.totalEarned);
     }
-    if(v === "admin"){ renderAdmin(); renderAdminConfig(); renderApprovals(); renderBonusEditor(); }
+    if(v === "admin"){ renderAdmin(); renderAdminConfig(); renderApprovals(); renderFeedback(); renderBonusEditor(); }
     if(v === "ekstra") renderEkstra();
   }
 
