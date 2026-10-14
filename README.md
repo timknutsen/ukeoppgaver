@@ -113,7 +113,8 @@ Admin-fanen har et «🏋️ Trening»-kort med data fra treningsappen
 (økter på rad), ukestripe for denne uka, fullførte økter denne uka av
 planlagte, totalt antall økter og når det sist ble trent. Dager som aldri
 er rørt i treningsappen ligger ikke i skyen; da avgjør planen om dagen var en
-treningsdag.
+treningsdag. En dag der økta ble flyttet og tatt igjen en annen dag, vises med
+↪ og bryter verken rekka eller uka, samme regel som i treningsappen.
 
 ## Meldinger fra treningsappen
 
