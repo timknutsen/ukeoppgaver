@@ -97,3 +97,25 @@ create policy "bonus_claims are readable"  on bonus_claims for select using (tru
 create policy "bonus_claims are writable"  on bonus_claims for insert with check (true);
 create policy "bonus_claims are updatable" on bonus_claims for update using (true);
 create policy "bonus_claims are deletable" on bonus_claims for delete using (true);
+
+-- ---- Meldinger fra appene ----
+-- Feil og forslag sendt fra treningsappen ("Si fra"). Vises i Admin-fanen.
+create table if not exists feedback (
+  id bigint generated always as identity primary key,
+  app text not null default 'trening' check (char_length(app) <= 40),
+  kind text not null default 'forslag' check (kind in ('feil','forslag')),
+  message text not null check (char_length(message) between 1 and 2000),
+  context text not null default '' check (char_length(context) <= 500),
+  status text not null default 'ny' check (status in ('ny','ferdig')),
+  created_at timestamptz not null default now(),
+  handled_at timestamptz
+);
+
+create index if not exists feedback_status_idx on feedback (status, created_at desc);
+
+alter table feedback enable row level security;
+
+create policy "feedback is readable"  on feedback for select using (true);
+create policy "feedback is writable"  on feedback for insert with check (status = 'ny' and handled_at is null);
+create policy "feedback is updatable" on feedback for update using (true);
+create policy "feedback is deletable" on feedback for delete using (true);
